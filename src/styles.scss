@@ -2,6 +2,18 @@
    Estilos globales — AlbumApp PWA (mobile-first)
    ============================================ */
 
+/* --- Base mobile (siempre activo) --- */
+html, body {
+  margin: 0;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+app-root {
+  display: block;
+  height: 100%;
+}
+
 /* --- Marco de teléfono en desktop (> 768px) --- */
 @media (min-width: 769px) {
   body {
