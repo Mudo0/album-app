@@ -11,7 +11,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink, Router, NavigationEnd } from '@angular/router';
 import { DragDropModule } from '@angular/cdk/drag-drop';
-import type { CdkDragEnd } from '@angular/cdk/drag-drop';
+import type { CdkDragEnd, CdkDragStart } from '@angular/cdk/drag-drop';
 import { filter } from 'rxjs';
 import type { Album } from '../../../core/models/album.model';
 import type { Image } from '../../../core/models/image.model';
@@ -22,6 +22,7 @@ import { BackButton } from '../../../shared/components/back-button/back-button';
 interface StickerImage extends Image {
   x: number;
   y: number;
+  z: number;
 }
 
 @Component({
@@ -63,6 +64,17 @@ export class AlbumDetail implements OnInit, OnDestroy {
       this.urls.set(sticker.id, URL.createObjectURL(blob));
     }
     return this.urls.get(sticker.id)!;
+  }
+
+  onDragStarted(sticker: StickerImage): void {
+    // Mover al final del array para que quede último en el DOM
+    // y darle el z-index máximo (= cantidad de stickers)
+    this.stickers.update((current) => {
+      const rest = current.filter((s) => s.id !== sticker.id);
+      return [...rest, sticker];
+    });
+    sticker.z = this.stickers().length;
+    
   }
 
   onDragEnded(sticker: StickerImage, event: CdkDragEnd): void {
@@ -109,11 +121,11 @@ export class AlbumDetail implements OnInit, OnDestroy {
     this.urls.clear();
 
     const images = await this.imageService.getByAlbum(album.id);
-    let cascade = 0;
-    const stickers: StickerImage[] = images.map((img) => ({
+    const stickers: StickerImage[] = images.map((img, i) => ({
       ...img,
-      x: img.x ?? 20 + ((cascade++ * 55) % 240),
-      y: img.y ?? 20 + ((cascade++ * 35) % 560),
+      x: img.x ?? 20 + ((i * 55) % 240),
+      y: img.y ?? 20 + ((i * 35) % 560),
+      z: i + 1,
     }));
     this.stickers.set(stickers);
   }
