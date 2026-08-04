@@ -19,15 +19,23 @@
       <p class="empty-text">
         Agregá fotos desde tu dispositivo para empezar a llenar este cuaderno
       </p>
-      <button class="empty-cta" disabled>
+      <a
+        class="empty-cta"
+        [routerLink]="['/albums', id(), 'upload']"
+      >
         Agregar imágenes
-      </button>
+      </a>
     </div>
   } @else {
     <div class="grid">
       @for (image of images(); track image.id) {
         <div class="photo">
-          <!-- TODO: image viewer -->
+          <img
+            class="photo-img"
+            [src]="imageUrl(image)"
+            [alt]="image.filename"
+            loading="lazy"
+          />
         </div>
       }
     </div>
@@ -36,8 +44,12 @@
 
 @if (album()) {
   <footer class="footer">
-    <button class="add-btn" disabled aria-label="Agregar imagen">
+    <a
+      class="add-btn"
+      [routerLink]="['/albums', id(), 'upload']"
+      aria-label="Agregar imagen"
+    >
       <span class="add-icon">+</span>
-    </button>
+    </a>
   </footer>
 }
