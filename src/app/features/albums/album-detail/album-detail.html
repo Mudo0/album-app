@@ -12,7 +12,7 @@
       <p class="empty-title">Álbum no encontrado</p>
       <a class="empty-cta" routerLink="/albums">Volver a álbumes</a>
     </div>
-  } @else if (images().length === 0) {
+  } @else if (stickers().length === 0) {
     <div class="empty">
       <div class="empty-icon">🖼️</div>
       <p class="empty-title">Sin imágenes</p>
@@ -27,18 +27,24 @@
       </a>
     </div>
   } @else {
-    <div class="grid">
-      @for (image of images(); track image.id) {
-        <div class="photo">
+    <div class="canvas" cdkDragBoundary>
+      @for (sticker of stickers(); track sticker.id) {
+        <div
+          class="sticker"
+          cdkDrag
+          cdkDragBoundary=".canvas"
+          [cdkDragFreeDragPosition]="{ x: sticker.x, y: sticker.y }"
+          (cdkDragEnded)="onDragEnded(sticker, $event)"
+        >
           <img
-            class="photo-img"
-            [src]="imageUrl(image)"
-            [alt]="image.filename"
-            loading="lazy"
+            class="sticker-img"
+            [src]="stickerUrl(sticker)"
+            [alt]="sticker.filename"
+            draggable="false"
           />
           <button
-            class="photo-delete"
-            (click)="deleteImage(image.id, $event)"
+            class="sticker-delete"
+            (click)="deleteImage(sticker.id, $event)"
             aria-label="Eliminar imagen"
           >
             ✕

@@ -81,18 +81,28 @@ export class DbService {
       .equals(albumId)
       .last();
 
+    const order = (lastImage?.order ?? -1) + 1;
+    const x = 20 + ((order * 55) % 240);
+    const y = 20 + ((order * 35) % 560);
+
     const image: Image = {
       id: crypto.randomUUID(),
       albumId,
       data: blob,
       filename: file.name,
       mimeType: file.type,
-      order: (lastImage?.order ?? -1) + 1,
+      order,
+      x,
+      y,
       createdAt: new Date(),
     };
 
     await this.db.images.add(image);
     return image;
+  }
+
+  async updateImagePosition(id: string, x: number, y: number): Promise<void> {
+    await this.db.images.update(id, { x, y });
   }
 
   async deleteImage(id: string): Promise<void> {

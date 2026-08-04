@@ -21,4 +21,8 @@ export class ImageService {
   remove(id: string): Promise<void> {
     return this.db.deleteImage(id);
   }
+
+  updatePosition(id: string, x: number, y: number): Promise<void> {
+    return this.db.updateImagePosition(id, x, y);
+  }
 }

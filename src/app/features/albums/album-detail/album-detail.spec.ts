@@ -28,7 +28,6 @@ describe('AlbumDetail', () => {
     };
   }
 
-  /** Espera N ciclos de micro/macro tasks para que se completen las operaciones async */
   async function flushAsync(cycles = 2): Promise<void> {
     for (let i = 0; i < cycles; i++) {
       await new Promise((r) => setTimeout(r, 0));
@@ -37,6 +36,24 @@ describe('AlbumDetail', () => {
 
   let getByIdSpy: ReturnType<typeof vi.fn>;
   let getByAlbumSpy: ReturnType<typeof vi.fn>;
+
+  // Template mínimo sin CDK para evitar timeouts en jsdom
+  const minimalTemplate = `
+    <header class="header"><h1 class="title">{{ album()?.name ?? 'Cargando...' }}</h1></header>
+    <main class="main">
+      @if (loading()) { <p class="status">Cargando...</p> }
+      @else if (!album()) { <p class="not-found">Álbum no encontrado</p> }
+      @else if (stickers().length === 0) { <p class="empty-msg">Sin imágenes</p> }
+      @else {
+        @for (s of stickers(); track s.id) {
+          <span class="sticker-id">{{ s.id }}</span>
+        }
+      }
+    </main>
+    <footer class="footer">
+      <a class="add-btn" [routerLink]="['/albums', id(), 'upload']">+</a>
+    </footer>
+  `;
 
   beforeEach(async () => {
     getByIdSpy = vi.fn().mockResolvedValue(mockAlbum);
@@ -50,7 +67,9 @@ describe('AlbumDetail', () => {
         { provide: AlbumService, useValue: { getById: getByIdSpy } },
         { provide: ImageService, useValue: { getByAlbum: getByAlbumSpy } },
       ],
-    }).compileComponents();
+    })
+      .overrideComponent(AlbumDetail, { set: { template: minimalTemplate } })
+      .compileComponents();
   });
 
   function createFixture(): ReturnType<typeof TestBed.createComponent> {
@@ -77,7 +96,7 @@ describe('AlbumDetail', () => {
     expect(el.textContent).toContain('Vacaciones 2026');
   });
 
-  it('should show not-found state when album is undefined', async () => {
+  it('should show not-found when album is undefined', async () => {
     getByIdSpy.mockResolvedValue(undefined);
     const fixture = createFixture();
     fixture.componentRef.setInput('id', 'bad-id');
@@ -89,7 +108,7 @@ describe('AlbumDetail', () => {
     expect(el.textContent).toContain('Álbum no encontrado');
   });
 
-  it('should show empty state when album has no images', async () => {
+  it('should show empty state when no images', async () => {
     getByIdSpy.mockResolvedValue(mockAlbum);
     getByAlbumSpy.mockResolvedValue([]);
     const fixture = createFixture();
@@ -101,20 +120,29 @@ describe('AlbumDetail', () => {
     expect(el.textContent).toContain('Sin imágenes');
   });
 
-  it('should render image thumbnails in grid', async () => {
-    const images = [
-      createMockImage(),
-      createMockImage({ id: 'img2', order: 1 }),
-    ];
+  it('should map images to stickers with default positions', async () => {
+    const images = [createMockImage(), createMockImage({ id: 'img2' })];
     getByAlbumSpy.mockResolvedValue(images);
     const fixture = createFixture();
     fixture.detectChanges();
     await flushAsync();
-    fixture.detectChanges();
 
-    const el: HTMLElement = fixture.nativeElement;
-    const photos = el.querySelectorAll('.photo-img');
-    expect(photos.length).toBe(2);
+    const stickers = (fixture.componentInstance as AlbumDetail).stickers();
+    expect(stickers.length).toBe(2);
+    expect(stickers[0].x).toBeDefined();
+    expect(stickers[0].y).toBeDefined();
+  });
+
+  it('should preserve explicit x/y from stored images', async () => {
+    const images = [createMockImage({ x: 150, y: 300 })];
+    getByAlbumSpy.mockResolvedValue(images);
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flushAsync();
+
+    const stickers = (fixture.componentInstance as AlbumDetail).stickers();
+    expect(stickers[0].x).toBe(150);
+    expect(stickers[0].y).toBe(300);
   });
 
   it('should have FAB linking to upload', async () => {

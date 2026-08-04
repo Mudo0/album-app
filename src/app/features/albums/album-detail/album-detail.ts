@@ -10,6 +10,8 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink, Router, NavigationEnd } from '@angular/router';
+import { DragDropModule } from '@angular/cdk/drag-drop';
+import type { CdkDragEnd } from '@angular/cdk/drag-drop';
 import { filter } from 'rxjs';
 import type { Album } from '../../../core/models/album.model';
 import type { Image } from '../../../core/models/image.model';
@@ -17,10 +19,15 @@ import { AlbumService } from '../../../core/services/album.service';
 import { ImageService } from '../../../core/services/image.service';
 import { BackButton } from '../../../shared/components/back-button/back-button';
 
+interface StickerImage extends Image {
+  x: number;
+  y: number;
+}
+
 @Component({
   selector: 'app-album-detail',
   standalone: true,
-  imports: [RouterLink, BackButton],
+  imports: [RouterLink, BackButton, DragDropModule],
   templateUrl: './album-detail.html',
   styleUrl: './album-detail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -34,7 +41,7 @@ export class AlbumDetail implements OnInit, OnDestroy {
   readonly id = input.required<string>();
 
   readonly album = signal<Album | undefined>(undefined);
-  readonly images = signal<Image[]>([]);
+  readonly stickers = signal<StickerImage[]>([]);
   readonly loading = signal(true);
 
   private readonly urls = new Map<string, string>();
@@ -50,12 +57,19 @@ export class AlbumDetail implements OnInit, OnDestroy {
       .subscribe(() => this.loadImages());
   }
 
-  imageUrl(image: Image): string {
-    if (!this.urls.has(image.id)) {
-      const blob = new Blob([image.data], { type: image.mimeType });
-      this.urls.set(image.id, URL.createObjectURL(blob));
+  stickerUrl(sticker: StickerImage): string {
+    if (!this.urls.has(sticker.id)) {
+      const blob = new Blob([sticker.data], { type: sticker.mimeType });
+      this.urls.set(sticker.id, URL.createObjectURL(blob));
     }
-    return this.urls.get(image.id)!;
+    return this.urls.get(sticker.id)!;
+  }
+
+  onDragEnded(sticker: StickerImage, event: CdkDragEnd): void {
+    const { x, y } = event.source.getFreeDragPosition();
+    sticker.x = x;
+    sticker.y = y;
+    this.imageService.updatePosition(sticker.id, x, y);
   }
 
   async deleteImage(imageId: string, event: Event): Promise<void> {
@@ -63,7 +77,6 @@ export class AlbumDetail implements OnInit, OnDestroy {
     event.preventDefault();
     if (!confirm('¿Eliminar esta imagen?')) return;
 
-    // Limpiar URL antes de borrar
     const url = this.urls.get(imageId);
     if (url) URL.revokeObjectURL(url);
     this.urls.delete(imageId);
@@ -96,6 +109,12 @@ export class AlbumDetail implements OnInit, OnDestroy {
     this.urls.clear();
 
     const images = await this.imageService.getByAlbum(album.id);
-    this.images.set(images);
+    let cascade = 0;
+    const stickers: StickerImage[] = images.map((img) => ({
+      ...img,
+      x: img.x ?? 20 + ((cascade++ * 55) % 240),
+      y: img.y ?? 20 + ((cascade++ * 35) % 560),
+    }));
+    this.stickers.set(stickers);
   }
 }
