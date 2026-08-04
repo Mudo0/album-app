@@ -8,7 +8,7 @@ import {
   ChangeDetectionStrategy,
   OnDestroy,
 } from '@angular/core';
-import { Router } from '@angular/router';
+import { Location } from '@angular/common';
 import { ImageService } from '../../../core/services/image.service';
 import { BackButton } from '../../../shared/components/back-button/back-button';
 
@@ -27,7 +27,7 @@ interface PreviewFile {
 })
 export class ImageUploader implements OnDestroy {
   private readonly imageService = inject(ImageService);
-  private readonly router = inject(Router);
+  private readonly location = inject(Location);
 
   readonly id = input.required<string>();
 
@@ -72,7 +72,8 @@ export class ImageUploader implements OnDestroy {
       await this.imageService.add(albumId, preview.file);
     }
 
-    this.router.navigate(['/albums', albumId]);
+    // Volver atrás en vez de forward — evita duplicar el detail en el historial
+    this.location.back();
   }
 
   ngOnDestroy(): void {

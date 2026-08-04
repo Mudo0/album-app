@@ -1,15 +1,18 @@
 import { TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
+import { provideRouter } from '@angular/router';
+import { Location } from '@angular/common';
 import { ImageUploader } from './image-uploader';
 import { ImageService } from '../../../core/services/image.service';
 
 describe('ImageUploader', () => {
   let addSpy: ReturnType<typeof vi.fn>;
   let mockFileInput: { click: ReturnType<typeof vi.fn> };
+  let locationBackSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     addSpy = vi.fn().mockResolvedValue({ id: 'new-img' });
     mockFileInput = { click: vi.fn() };
+    locationBackSpy = vi.fn();
 
     vi.spyOn(URL, 'createObjectURL').mockImplementation(
       () => `blob:mock-${Math.random()}`,
@@ -21,6 +24,7 @@ describe('ImageUploader', () => {
       imports: [ImageUploader],
       providers: [
         provideRouter([]),
+        { provide: Location, useValue: { back: locationBackSpy } },
         { provide: ImageService, useValue: { add: addSpy } },
       ],
     }).compileComponents();
@@ -121,10 +125,8 @@ describe('ImageUploader', () => {
     expect(component.files().length).toBe(0);
   });
 
-  it('should save all files and navigate back', async () => {
+  it('should save all files and go back', async () => {
     const fixture = createFixture();
-    const router = TestBed.inject(Router);
-    vi.spyOn(router, 'navigate').mockImplementation(async () => true);
     fixture.detectChanges();
 
     const component = fixture.componentInstance;
@@ -140,7 +142,7 @@ describe('ImageUploader', () => {
     expect(addSpy).toHaveBeenCalledTimes(2);
     expect(addSpy).toHaveBeenCalledWith('album-1', f1);
     expect(addSpy).toHaveBeenCalledWith('album-1', f2);
-    expect(router.navigate).toHaveBeenCalledWith(['/albums', 'album-1']);
+    expect(locationBackSpy).toHaveBeenCalled();
   });
 
   it('should not save when already saving', async () => {
