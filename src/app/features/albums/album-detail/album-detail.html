@@ -1,0 +1,43 @@
+<header class="header">
+  <app-back-button />
+  <h1 class="title">{{ album()?.name ?? 'Cargando...' }}</h1>
+  <div class="spacer"></div>
+</header>
+
+<main class="main">
+  @if (loading()) {
+    <p class="status">Cargando...</p>
+  } @else if (!album()) {
+    <div class="empty">
+      <p class="empty-title">Álbum no encontrado</p>
+      <a class="empty-cta" routerLink="/albums">Volver a álbumes</a>
+    </div>
+  } @else if (images().length === 0) {
+    <div class="empty">
+      <div class="empty-icon">🖼️</div>
+      <p class="empty-title">Sin imágenes</p>
+      <p class="empty-text">
+        Agregá fotos desde tu dispositivo para empezar a llenar este cuaderno
+      </p>
+      <button class="empty-cta" disabled>
+        Agregar imágenes
+      </button>
+    </div>
+  } @else {
+    <div class="grid">
+      @for (image of images(); track image.id) {
+        <div class="photo">
+          <!-- TODO: image viewer -->
+        </div>
+      }
+    </div>
+  }
+</main>
+
+@if (album()) {
+  <footer class="footer">
+    <button class="add-btn" disabled aria-label="Agregar imagen">
+      <span class="add-icon">+</span>
+    </button>
+  </footer>
+}
