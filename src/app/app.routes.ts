@@ -33,6 +33,8 @@ export const routes: Routes = [
             (m) => m.ImageViewer,
           ),
       },
+      { path: '**', redirectTo: '/albums' },
     ],
   },
+  { path: '**', redirectTo: '/albums' },
 ];
