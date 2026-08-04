@@ -31,17 +31,17 @@ export class ImageUploader implements OnDestroy {
 
   readonly id = input.required<string>();
 
-  protected readonly files = signal<PreviewFile[]>([]);
-  protected readonly saving = signal(false);
+  readonly files = signal<PreviewFile[]>([]);
+  readonly saving = signal(false);
 
   private readonly fileInputRef =
     viewChild.required<ElementRef<HTMLInputElement>>('fileInput');
 
-  protected openPicker(): void {
+  openPicker(): void {
     this.fileInputRef().nativeElement.click();
   }
 
-  protected onFilesSelected(event: Event): void {
+  onFilesSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     const selected = Array.from(input.files ?? []);
 
@@ -56,13 +56,13 @@ export class ImageUploader implements OnDestroy {
     input.value = '';
   }
 
-  protected removeFile(index: number): void {
+  removeFile(index: number): void {
     const removed = this.files()[index];
     URL.revokeObjectURL(removed.url);
     this.files.update((current) => current.filter((_, i) => i !== index));
   }
 
-  protected async save(): Promise<void> {
+  async save(): Promise<void> {
     if (this.saving() || this.files().length === 0) return;
 
     this.saving.set(true);
