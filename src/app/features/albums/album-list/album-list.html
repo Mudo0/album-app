@@ -1,0 +1,41 @@
+<header class="header">
+  <h1 class="title">Álbumes</h1>
+  <button class="fab" routerLink="/albums/new" aria-label="Crear álbum">
+    <span class="fab-icon">+</span>
+  </button>
+</header>
+
+<main class="main">
+  @if (loading()) {
+    <p class="status">Cargando álbumes...</p>
+  } @else if (albums().length === 0) {
+    <div class="empty">
+      <div class="empty-icon">📒</div>
+      <p class="empty-title">No tenés álbumes todavía</p>
+      <p class="empty-text">
+        Creá tu primer cuaderno para empezar a organizar tus fotos
+      </p>
+      <a class="empty-cta" routerLink="/albums/new">Crear álbum</a>
+    </div>
+  } @else {
+    <div class="grid">
+      @for (album of albums(); track album.id) {
+        <a
+          class="card"
+          [routerLink]="['/albums', album.id]"
+          [attr.aria-label]="'Abrir álbum ' + album.name"
+        >
+          <div
+            class="card-cover"
+            [style.background]="coverColor(album.id)"
+          >
+            @if (album.coverImageId) {
+              <span class="card-badge">📷</span>
+            }
+          </div>
+          <span class="card-name">{{ album.name }}</span>
+        </a>
+      }
+    </div>
+  }
+</main>
