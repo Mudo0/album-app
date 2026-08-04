@@ -90,10 +90,30 @@
 /* ---- Canvas ---- */
 
 .canvas {
+  --paper-grid-color: #e5e7eb;
+  --paper-grid-size: 20px;
+  --paper-noise-opacity: 0.25;
+  --paper-bg: #fdfdfd;
+
   width: 100%;
   height: 100%;
   position: relative;
   overflow: hidden;
+  background-color: var(--paper-bg);
+  background-image:
+    linear-gradient(var(--paper-grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--paper-grid-color) 1px, transparent 1px);
+  background-size: var(--paper-grid-size) var(--paper-grid-size);
+}
+
+/* Capa de ruido (porosidad del papel) */
+.canvas::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--paper-noise-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='nf'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23nf)'/%3E%3C/svg%3E");
 }
 
 .sticker {
