@@ -20,10 +20,10 @@ export const routes: Routes = [
           ),
       },
       {
-        path: ':id',
+        path: ':id/upload',
         loadComponent: () =>
-          import('./features/albums/album-detail/album-detail').then(
-            (m) => m.AlbumDetail,
+          import('./features/images/image-uploader/image-uploader').then(
+            (m) => m.ImageUploader,
           ),
       },
       {
@@ -31,6 +31,13 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/images/image-viewer/image-viewer').then(
             (m) => m.ImageViewer,
+          ),
+      },
+      {
+        path: ':id',
+        loadComponent: () =>
+          import('./features/albums/album-detail/album-detail').then(
+            (m) => m.AlbumDetail,
           ),
       },
       { path: '**', redirectTo: '/albums' },
