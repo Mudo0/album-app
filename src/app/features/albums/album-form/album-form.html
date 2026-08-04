@@ -1,0 +1,30 @@
+<header class="header">
+  <button class="back" (click)="goBack()" aria-label="Volver">
+    ←
+  </button>
+  <h1 class="title">Nuevo álbum</h1>
+  <div class="spacer"></div>
+</header>
+
+<main class="main">
+  <label class="field">
+    <span class="field-label">Nombre</span>
+    <input
+      class="field-input"
+      type="text"
+      placeholder="Ej: Vacaciones 2026"
+      [ngModel]="name()"
+      (ngModelChange)="name.set($event)"
+      maxlength="40"
+      autofocus
+    />
+  </label>
+
+  <button
+    class="save-btn"
+    [disabled]="saving() || !name().trim()"
+    (click)="save()"
+  >
+    {{ saving() ? 'Guardando...' : 'Crear álbum' }}
+  </button>
+</main>
