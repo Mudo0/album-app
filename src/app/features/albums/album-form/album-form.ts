@@ -2,11 +2,12 @@ import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/cor
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AlbumService } from '../../../core/services/album.service';
+import { BackButton } from '../../../shared/components/back-button/back-button';
 
 @Component({
   selector: 'app-album-form',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, BackButton],
   templateUrl: './album-form.html',
   styleUrl: './album-form.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -17,10 +18,6 @@ export class AlbumForm {
 
   protected readonly name = signal('');
   protected readonly saving = signal(false);
-
-  protected goBack(): void {
-    this.router.navigate(['/albums']);
-  }
 
   protected async save(): Promise<void> {
     const trimmed = this.name().trim();
