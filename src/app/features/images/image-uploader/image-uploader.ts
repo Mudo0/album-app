@@ -1,10 +1,83 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import {
+  Component,
+  inject,
+  input,
+  signal,
+  viewChild,
+  ElementRef,
+  ChangeDetectionStrategy,
+  OnDestroy,
+} from '@angular/core';
+import { Router } from '@angular/router';
+import { ImageService } from '../../../core/services/image.service';
+import { BackButton } from '../../../shared/components/back-button/back-button';
+
+interface PreviewFile {
+  file: File;
+  url: string;
+}
 
 @Component({
   selector: 'app-image-uploader',
-  imports: [],
-  template: ` <p>image-uploader works!</p> `,
-  styles: ``,
+  standalone: true,
+  imports: [BackButton],
+  templateUrl: './image-uploader.html',
+  styleUrl: './image-uploader.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ImageUploader {}
+export class ImageUploader implements OnDestroy {
+  private readonly imageService = inject(ImageService);
+  private readonly router = inject(Router);
+
+  readonly id = input.required<string>();
+
+  protected readonly files = signal<PreviewFile[]>([]);
+  protected readonly saving = signal(false);
+
+  private readonly fileInputRef =
+    viewChild.required<ElementRef<HTMLInputElement>>('fileInput');
+
+  protected openPicker(): void {
+    this.fileInputRef().nativeElement.click();
+  }
+
+  protected onFilesSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const selected = Array.from(input.files ?? []);
+
+    const previews: PreviewFile[] = selected.map((file) => ({
+      file,
+      url: URL.createObjectURL(file),
+    }));
+
+    this.files.update((current) => [...current, ...previews]);
+
+    // Reset para permitir seleccionar los mismos archivos de nuevo
+    input.value = '';
+  }
+
+  protected removeFile(index: number): void {
+    const removed = this.files()[index];
+    URL.revokeObjectURL(removed.url);
+    this.files.update((current) => current.filter((_, i) => i !== index));
+  }
+
+  protected async save(): Promise<void> {
+    if (this.saving() || this.files().length === 0) return;
+
+    this.saving.set(true);
+    const albumId = this.id();
+
+    for (const preview of this.files()) {
+      await this.imageService.add(albumId, preview.file);
+    }
+
+    this.router.navigate(['/albums', albumId]);
+  }
+
+  ngOnDestroy(): void {
+    for (const preview of this.files()) {
+      URL.revokeObjectURL(preview.url);
+    }
+  }
+}
