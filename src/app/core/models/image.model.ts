@@ -4,8 +4,9 @@ export interface Image {
   data: Blob;
   thumbnail?: Blob;
   filename: string;
-  //tipo de archivo png, jpeg
   mimeType: string;
   order: number;
+  x?: number;
+  y?: number;
   createdAt: Date;
 }
