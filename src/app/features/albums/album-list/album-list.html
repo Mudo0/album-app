@@ -20,22 +20,48 @@
   } @else {
     <div class="grid">
       @for (album of albums(); track album.id) {
-        <a
-          class="card"
-          [routerLink]="['/albums', album.id]"
-          [attr.aria-label]="'Abrir álbum ' + album.name"
-        >
-          <div
-            class="card-cover"
-            [style.background]="coverColor(album.id)"
+        <div class="card">
+          <a
+            class="card-link"
+            [routerLink]="['/albums', album.id]"
+            [attr.aria-label]="'Abrir álbum ' + album.name"
           >
-            @if (album.coverImageId) {
-              <span class="card-badge">📷</span>
-            }
-          </div>
-          <span class="card-name">{{ album.name }}</span>
-        </a>
+            <div
+              class="card-cover"
+              [style.background]="coverColor(album.id)"
+            >
+              @if (album.coverImageId) {
+                <span class="card-badge">📷</span>
+              }
+            </div>
+            <span class="card-name">{{ album.name }}</span>
+          </a>
+
+          <button
+            class="card-menu-btn"
+            (click)="toggleMenu(album.id, $event)"
+            aria-label="Opciones del álbum"
+          >
+            ⋯
+          </button>
+
+          @if (openMenuId() === album.id) {
+            <div class="card-menu">
+              <button class="card-menu-item" (click)="editAlbum(album.id)">
+                ✏️ Editar
+              </button>
+              <button class="card-menu-item card-menu-item--danger" (click)="deleteAlbum(album.id)">
+                🗑️ Eliminar
+              </button>
+            </div>
+          }
+        </div>
       }
     </div>
+  }
+
+  <!-- Overlay para cerrar el menú al tocar afuera -->
+  @if (openMenuId()) {
+    <div class="menu-overlay" (click)="closeMenu()"></div>
   }
 </main>

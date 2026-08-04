@@ -42,7 +42,6 @@ export class AlbumDetail implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.loadData();
 
-    // Recargar imágenes al volver del uploader (misma ruta, componente ya instanciado)
     this.router.events
       .pipe(
         filter((e) => e instanceof NavigationEnd),
@@ -57,6 +56,20 @@ export class AlbumDetail implements OnInit, OnDestroy {
       this.urls.set(image.id, URL.createObjectURL(blob));
     }
     return this.urls.get(image.id)!;
+  }
+
+  async deleteImage(imageId: string, event: Event): Promise<void> {
+    event.stopPropagation();
+    event.preventDefault();
+    if (!confirm('¿Eliminar esta imagen?')) return;
+
+    // Limpiar URL antes de borrar
+    const url = this.urls.get(imageId);
+    if (url) URL.revokeObjectURL(url);
+    this.urls.delete(imageId);
+
+    await this.imageService.remove(imageId);
+    await this.loadImages();
   }
 
   ngOnDestroy(): void {
@@ -77,7 +90,6 @@ export class AlbumDetail implements OnInit, OnDestroy {
     const album = this.album();
     if (!album) return;
 
-    // Limpiar URLs viejas
     for (const url of this.urls.values()) {
       URL.revokeObjectURL(url);
     }

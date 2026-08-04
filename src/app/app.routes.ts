@@ -27,6 +27,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: ':id/edit',
+        loadComponent: () =>
+          import('./features/albums/album-form/album-form').then(
+            (m) => m.AlbumForm,
+          ),
+      },
+      {
         path: ':albumId/view/:imageId',
         loadComponent: () =>
           import('./features/images/image-viewer/image-viewer').then(

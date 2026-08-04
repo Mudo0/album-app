@@ -36,6 +36,13 @@
             [alt]="image.filename"
             loading="lazy"
           />
+          <button
+            class="photo-delete"
+            (click)="deleteImage(image.id, $event)"
+            aria-label="Eliminar imagen"
+          >
+            ✕
+          </button>
         </div>
       }
     </div>

@@ -3,7 +3,10 @@ import { provideRouter, Routes } from '@angular/router';
 import { AlbumForm } from './album-form';
 import { AlbumService } from '../../../core/services/album.service';
 
-const testRoutes: Routes = [{ path: 'albums', component: AlbumForm }];
+const testRoutes: Routes = [
+  { path: 'albums', component: AlbumForm },
+  { path: 'albums/:id', component: AlbumForm },
+];
 
 describe('AlbumForm', () => {
   let createSpy: ReturnType<typeof vi.fn>;
