@@ -14,8 +14,8 @@ import { AlbumService } from '../../../core/services/album.service';
 export class AlbumList implements OnInit {
   private readonly albumService = inject(AlbumService);
 
-  protected readonly albums = signal<Album[]>([]);
-  protected readonly loading = signal(true);
+  readonly albums = signal<Album[]>([]);
+  readonly loading = signal(true);
 
   ngOnInit(): void {
     this.albumService.getAll().then((data) => {
@@ -25,7 +25,7 @@ export class AlbumList implements OnInit {
   }
 
   /** Genera un color pastel determinista a partir del ID del álbum */
-  protected coverColor(id: string): string {
+  coverColor(id: string): string {
     const hash = [...id].reduce((acc, c) => acc + c.charCodeAt(0), 0);
     const hue = hash % 360;
     return `hsl(${hue}, 50%, 82%)`;

@@ -16,10 +16,10 @@ export class AlbumForm {
   private readonly albumService = inject(AlbumService);
   private readonly router = inject(Router);
 
-  protected readonly name = signal('');
-  protected readonly saving = signal(false);
+  readonly name = signal('');
+  readonly saving = signal(false);
 
-  protected async save(): Promise<void> {
+  async save(): Promise<void> {
     const trimmed = this.name().trim();
     if (!trimmed || this.saving()) return;
 

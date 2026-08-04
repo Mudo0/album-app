@@ -33,9 +33,9 @@ export class AlbumDetail implements OnInit, OnDestroy {
 
   readonly id = input.required<string>();
 
-  protected readonly album = signal<Album | undefined>(undefined);
-  protected readonly images = signal<Image[]>([]);
-  protected readonly loading = signal(true);
+  readonly album = signal<Album | undefined>(undefined);
+  readonly images = signal<Image[]>([]);
+  readonly loading = signal(true);
 
   private readonly urls = new Map<string, string>();
 
@@ -51,7 +51,7 @@ export class AlbumDetail implements OnInit, OnDestroy {
       .subscribe(() => this.loadImages());
   }
 
-  protected imageUrl(image: Image): string {
+  imageUrl(image: Image): string {
     if (!this.urls.has(image.id)) {
       const blob = new Blob([image.data], { type: image.mimeType });
       this.urls.set(image.id, URL.createObjectURL(blob));
