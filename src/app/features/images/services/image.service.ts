@@ -24,4 +24,8 @@ export class ImageService {
   updatePosition(id: string, x: number, y: number): Promise<void> {
     return this.db.updateImagePosition(id, x, y);
   }
+
+  updateOrder(updates: Array<{ id: string; order: number }>): Promise<void> {
+    return this.db.updateImagesOrder(updates);
+  }
 }
