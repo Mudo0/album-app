@@ -105,6 +105,14 @@ export class DbService {
     await this.db.images.update(id, { x, y });
   }
 
+  async updateImagesOrder(updates: Array<{ id: string; order: number }>): Promise<void> {
+    await this.db.transaction('rw', this.db.images, async () => {
+      for (const { id, order } of updates) {
+        await this.db.images.update(id, { order });
+      }
+    });
+  }
+
   async deleteImage(id: string): Promise<void> {
     await this.db.images.delete(id);
   }
