@@ -15,9 +15,10 @@ import type { CdkDragEnd, CdkDragStart } from '@angular/cdk/drag-drop';
 import { filter } from 'rxjs';
 import type { Album } from '../../../core/models/album.model';
 import type { Image } from '../../../core/models/image.model';
-import { AlbumService } from '../../../core/services/album.service';
-import { ImageService } from '../../../core/services/image.service';
+import { AlbumService } from '../services/album.service';
+
 import { BackButton } from '../../../shared/components/back-button/back-button';
+import { ImageService } from '../../images/services/image.service';
 
 interface StickerImage extends Image {
   x: number;
@@ -74,7 +75,6 @@ export class AlbumDetail implements OnInit, OnDestroy {
       return [...rest, sticker];
     });
     sticker.z = this.stickers().length;
-    
   }
 
   onDragEnded(sticker: StickerImage, event: CdkDragEnd): void {

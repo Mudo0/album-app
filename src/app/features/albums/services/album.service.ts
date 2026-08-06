@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import type { Album } from '../models/album.model';
-import { DbService } from './db.service';
+import type { Album } from '../../../core/models/album.model';
+import { DbService } from '../../../core/services/db.service';
 
 @Injectable({ providedIn: 'root' })
 export class AlbumService {
@@ -18,10 +18,7 @@ export class AlbumService {
     return this.db.createAlbum(data);
   }
 
-  update(
-    id: string,
-    changes: Partial<Pick<Album, 'name' | 'coverImageId'>>,
-  ): Promise<void> {
+  update(id: string, changes: Partial<Pick<Album, 'name' | 'coverImageId'>>): Promise<void> {
     return this.db.updateAlbum(id, changes);
   }
 

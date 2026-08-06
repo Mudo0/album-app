@@ -1,6 +1,6 @@
 import { Component, inject, input, signal, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { AlbumService } from '../../../core/services/album.service';
+import { AlbumService } from '../services/album.service';
 import { NavigationService } from '../../../core/services/navigation.service';
 import { BackButton } from '../../../shared/components/back-button/back-button';
 
