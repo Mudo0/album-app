@@ -168,6 +168,25 @@ describe('DbService', () => {
     });
   });
 
+  describe('updateImagesOrder', () => {
+    it('should persist the full sequence inside a transaction', async () => {
+      transactionSpy.mockImplementation(
+        (_mode: string, _t1: unknown, fn: () => Promise<void>) => fn(),
+      );
+
+      await service.updateImagesOrder([
+        { id: 'img2', order: 0 },
+        { id: 'img3', order: 1 },
+        { id: 'img1', order: 2 },
+      ]);
+
+      expect(transactionSpy).toHaveBeenCalled();
+      expect(imagesTable['update']).toHaveBeenCalledWith('img2', { order: 0 });
+      expect(imagesTable['update']).toHaveBeenCalledWith('img3', { order: 1 });
+      expect(imagesTable['update']).toHaveBeenCalledWith('img1', { order: 2 });
+    });
+  });
+
   describe('deleteImage', () => {
     it('should delete image by id', async () => {
       await service.deleteImage('img1');
