@@ -1,5 +1,6 @@
 import { Component, inject, input, signal, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Location } from '@angular/common';
 import { Router } from '@angular/router';
 import { AlbumService } from '../../../core/services/album.service';
 import { BackButton } from '../../../shared/components/back-button/back-button';
@@ -15,6 +16,7 @@ import { BackButton } from '../../../shared/components/back-button/back-button';
 export class AlbumForm implements OnInit {
   private readonly albumService = inject(AlbumService);
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
 
   /** Si se provee, estamos en modo edición */
   readonly id = input<string>();
@@ -48,10 +50,13 @@ export class AlbumForm implements OnInit {
     const albumId = this.id();
     if (albumId) {
       await this.albumService.update(albumId, { name: trimmed });
-      this.router.navigate(['/albums', albumId]);
+      // Pantalla transitiva: volvemos al listado y el edit no queda en el historial
+      this.location.back();
     } else {
       const album = await this.albumService.create({ name: trimmed });
-      this.router.navigate(['/albums', album.id]);
+      // Reemplazamos el form "new" en el historial: el volver desde el detail
+      // cae en el listado, no en el formulario vacío
+      this.router.navigate(['/albums', album.id], { replaceUrl: true });
     }
   }
 }
