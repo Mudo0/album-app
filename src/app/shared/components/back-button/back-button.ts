@@ -1,5 +1,5 @@
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
-import { Location } from '@angular/common';
+import { NavigationService } from '../../../core/services/navigation.service';
 
 @Component({
   selector: 'app-back-button',
@@ -31,9 +31,9 @@ import { Location } from '@angular/common';
   `,
 })
 export class BackButton {
-  private readonly location = inject(Location);
+  private readonly navigation = inject(NavigationService);
 
   protected goBack(): void {
-    this.location.back();
+    this.navigation.back();
   }
 }
