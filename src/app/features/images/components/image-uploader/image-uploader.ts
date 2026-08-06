@@ -8,9 +8,10 @@ import {
   ChangeDetectionStrategy,
   OnDestroy,
 } from '@angular/core';
-import { ImageService } from '../../../core/services/image.service';
+
 import { NavigationService } from '../../../../core/services/navigation.service';
 import { BackButton } from '../../../../shared/components/back-button/back-button';
+import { ImageService } from '../../services/image.service';
 interface PreviewFile {
   file: File;
   url: string;

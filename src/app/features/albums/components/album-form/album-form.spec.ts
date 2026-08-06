@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router, Routes } from '@angular/router';
 import { AlbumForm } from './album-form';
-import { AlbumService } from '../../../core/services/album.service';
+import { AlbumService } from '../../services/album.service';
+
 
 const testRoutes: Routes = [
   { path: 'albums', component: AlbumForm },

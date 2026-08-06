@@ -1,8 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { ImageUploader } from './image-uploader';
-import { ImageService } from '../../../core/services/image.service';
-import { NavigationService } from '../../../core/services/navigation.service';
+import { NavigationService } from '../../../../core/services/navigation.service';
+import { ImageService } from '../../services/image.service';
 
 describe('ImageUploader', () => {
   let addSpy: ReturnType<typeof vi.fn>;
@@ -14,9 +14,7 @@ describe('ImageUploader', () => {
     mockFileInput = { click: vi.fn() };
     navigationBackSpy = vi.fn();
 
-    vi.spyOn(URL, 'createObjectURL').mockImplementation(
-      () => `blob:mock-${Math.random()}`,
-    );
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:mock-${Math.random()}`);
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
     TestBed.resetTestingModule();
@@ -39,8 +37,9 @@ describe('ImageUploader', () => {
     fixture.componentRef.setInput('id', 'album-1');
 
     const component = fixture.componentInstance;
-    (component as unknown as { fileInputRef: () => { nativeElement: typeof mockFileInput } }).fileInputRef =
-      vi.fn(() => ({ nativeElement: mockFileInput })) as never;
+    (
+      component as unknown as { fileInputRef: () => { nativeElement: typeof mockFileInput } }
+    ).fileInputRef = vi.fn(() => ({ nativeElement: mockFileInput })) as never;
 
     return fixture;
   }

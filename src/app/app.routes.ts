@@ -41,7 +41,9 @@ export const routes: Routes = [
       {
         path: ':id',
         loadComponent: () =>
-          import('./features/albums/album-detail/album-detail').then((m) => m.AlbumDetail),
+          import('./features/albums/components/album-detail/album-detail').then(
+            (m) => m.AlbumDetail,
+          ),
         data: { backTo: '/albums' },
       },
       { path: '**', redirectTo: '/albums' },

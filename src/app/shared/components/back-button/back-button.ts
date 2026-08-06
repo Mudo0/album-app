@@ -5,11 +5,7 @@ import { NavigationService } from '../../../core/services/navigation.service';
   selector: 'app-back-button',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <button class="back" (click)="goBack()" aria-label="Volver">
-      ←
-    </button>
-  `,
+  template: ` <button class="back" (click)="goBack()" aria-label="Volver">←</button> `,
   styles: `
     .back {
       width: 36px;

@@ -1,7 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import type { Image } from '../models/image.model';
-import { DbService } from './db.service';
-
+import { DbService } from '../../../core/services/db.service';
+import { Image } from '../../../core/models/image.model';
 @Injectable({ providedIn: 'root' })
 export class ImageService {
   private readonly db = inject(DbService);
