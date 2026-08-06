@@ -72,14 +72,21 @@ export class DbService {
     return this.db.images.get(id);
   }
 
+  // Devuelve la última imagen para que ImageService pueda calcular el 'order', 'x' e 'y'
+  async getLastImageByAlbum(albumId: string): Promise<Image | undefined> {
+    return this.db.images.where('albumId').equals(albumId).last();
+  }
+
+  // Inserción plana, la entidad Image ya viene armada
+  async insertImage(image: Image): Promise<void> {
+    await this.db.images.add(image);
+  }
+
   async addImage(albumId: string, file: File): Promise<Image> {
     const data = await file.arrayBuffer();
     const blob = new Blob([data], { type: file.type });
 
-    const lastImage = await this.db.images
-      .where('albumId')
-      .equals(albumId)
-      .last();
+    const lastImage = await this.db.images.where('albumId').equals(albumId).last();
 
     const order = (lastImage?.order ?? -1) + 1;
     const x = 20 + ((order * 55) % 240);
