@@ -4,7 +4,6 @@ import { AlbumService } from '../../services/album.service';
 import { NavigationService } from '../../../../core/services/navigation.service';
 import { BackButton } from '../../../../shared/components/back-button/back-button';
 
-
 @Component({
   selector: 'app-album-form',
   standalone: true,
@@ -36,6 +35,9 @@ export class AlbumForm implements OnInit {
     const album = await this.albumService.getById(albumId);
     if (album) {
       this.name.set(album.name);
+    } else {
+      // Si el álbum no existe, sacamos al usuario para evitar inconsistencias
+      this.navigation.back();
     }
     this.loading.set(false);
   }
