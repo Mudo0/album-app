@@ -13,12 +13,12 @@ import { RouterLink, Router, NavigationEnd } from '@angular/router';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import type { CdkDragEnd, CdkDragStart } from '@angular/cdk/drag-drop';
 import { filter } from 'rxjs';
-import type { Album } from '../../../core/models/album.model';
-import type { Image } from '../../../core/models/image.model';
-import { AlbumService } from '../services/album.service';
+import type { Album } from '../../../../core/models/album.model';
+import type { Image } from '../../../../core/models/image.model';
+import { AlbumService } from '../../services/album.service';
 
-import { BackButton } from '../../../shared/components/back-button/back-button';
-import { ImageService } from '../../images/services/image.service';
+import { BackButton } from '../../../../shared/components/back-button/back-button';
+import { ImageService } from '../../../images/services/image.service';
 
 interface StickerImage extends Image {
   x: number;

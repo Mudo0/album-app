@@ -9,8 +9,8 @@ import {
   OnDestroy,
 } from '@angular/core';
 import { ImageService } from '../../../core/services/image.service';
-import { NavigationService } from '../../../core/services/navigation.service';
-import { BackButton } from '../../../shared/components/back-button/back-button';
+import { NavigationService } from '../../../../core/services/navigation.service';
+import { BackButton } from '../../../../shared/components/back-button/back-button';
 interface PreviewFile {
   file: File;
   url: string;
@@ -33,8 +33,7 @@ export class ImageUploader implements OnDestroy {
   readonly files = signal<PreviewFile[]>([]);
   readonly saving = signal(false);
 
-  private readonly fileInputRef =
-    viewChild.required<ElementRef<HTMLInputElement>>('fileInput');
+  private readonly fileInputRef = viewChild.required<ElementRef<HTMLInputElement>>('fileInput');
 
   openPicker(): void {
     this.fileInputRef().nativeElement.click();

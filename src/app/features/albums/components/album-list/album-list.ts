@@ -1,7 +1,7 @@
 import { Component, inject, signal, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink, Router } from '@angular/router';
-import type { Album } from '../../../core/models/album.model';
-import { AlbumService } from '../services/album.service';
+import type { Album } from '../../../../core/models/album.model';
+import { AlbumService } from '../../services/album.service';
 
 @Component({
   selector: 'app-album-list',
