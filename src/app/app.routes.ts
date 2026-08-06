@@ -8,22 +8,18 @@ export const routes: Routes = [
       {
         path: '',
         loadComponent: () =>
-          import('./features/albums/album-list/album-list').then(
-            (m) => m.AlbumList,
-          ),
+          import('./features/albums/components/album-list/album-list').then((m) => m.AlbumList),
       },
       {
         path: 'new',
         loadComponent: () =>
-          import('./features/albums/album-form/album-form').then(
-            (m) => m.AlbumForm,
-          ),
+          import('./features/albums/components/album-form/album-form').then((m) => m.AlbumForm),
         data: { backTo: '/albums' },
       },
       {
         path: ':id/upload',
         loadComponent: () =>
-          import('./features/images/image-uploader/image-uploader').then(
+          import('./features/images/components/image-uploader/image-uploader').then(
             (m) => m.ImageUploader,
           ),
         data: { backTo: '/albums/:id' },
@@ -31,15 +27,13 @@ export const routes: Routes = [
       {
         path: ':id/edit',
         loadComponent: () =>
-          import('./features/albums/album-form/album-form').then(
-            (m) => m.AlbumForm,
-          ),
+          import('./features/albums/components/album-form/album-form').then((m) => m.AlbumForm),
         data: { backTo: '/albums' },
       },
       {
         path: ':albumId/view/:imageId',
         loadComponent: () =>
-          import('./features/images/image-viewer/image-viewer').then(
+          import('./features/images/components/image-viewer/image-viewer').then(
             (m) => m.ImageViewer,
           ),
         data: { backTo: '/albums/:albumId' },
@@ -47,9 +41,7 @@ export const routes: Routes = [
       {
         path: ':id',
         loadComponent: () =>
-          import('./features/albums/album-detail/album-detail').then(
-            (m) => m.AlbumDetail,
-          ),
+          import('./features/albums/album-detail/album-detail').then((m) => m.AlbumDetail),
         data: { backTo: '/albums' },
       },
       { path: '**', redirectTo: '/albums' },
