@@ -1,10 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { AlbumDetail } from './album-detail';
-import { AlbumService } from '../../../core/services/album.service';
-import { ImageService } from '../../../core/services/image.service';
-import type { Album } from '../../../core/models/album.model';
-import type { Image } from '../../../core/models/image.model';
+import { Album } from '../../../../core/models/album.model';
+import { Image } from '../../../../core/models/image.model';
+import { AlbumService } from '../../services/album.service';
+import { ImageService } from '../../../images/services/image.service';
 
 describe('AlbumDetail', () => {
   const mockAlbum: Album = {

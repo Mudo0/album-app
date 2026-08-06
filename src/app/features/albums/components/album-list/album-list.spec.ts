@@ -1,8 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { AlbumList } from './album-list';
-import { AlbumService } from '../../../core/services/album.service';
-import type { Album } from '../../../core/models/album.model';
+import { AlbumService } from '../../services/album.service';
+import { Album } from '../../../../core/models/album.model';
 
 describe('AlbumList', () => {
   const mockAlbums: Album[] = [
@@ -28,10 +28,7 @@ describe('AlbumList', () => {
 
     return TestBed.configureTestingModule({
       imports: [AlbumList],
-      providers: [
-        provideRouter([]),
-        { provide: AlbumService, useValue: { getAll: getAllSpy } },
-      ],
+      providers: [provideRouter([]), { provide: AlbumService, useValue: { getAll: getAllSpy } }],
     }).compileComponents();
   }
 
