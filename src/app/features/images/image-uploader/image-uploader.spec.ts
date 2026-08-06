@@ -1,18 +1,18 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { Location } from '@angular/common';
 import { ImageUploader } from './image-uploader';
 import { ImageService } from '../../../core/services/image.service';
+import { NavigationService } from '../../../core/services/navigation.service';
 
 describe('ImageUploader', () => {
   let addSpy: ReturnType<typeof vi.fn>;
   let mockFileInput: { click: ReturnType<typeof vi.fn> };
-  let locationBackSpy: ReturnType<typeof vi.fn>;
+  let navigationBackSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     addSpy = vi.fn().mockResolvedValue({ id: 'new-img' });
     mockFileInput = { click: vi.fn() };
-    locationBackSpy = vi.fn();
+    navigationBackSpy = vi.fn();
 
     vi.spyOn(URL, 'createObjectURL').mockImplementation(
       () => `blob:mock-${Math.random()}`,
@@ -24,7 +24,7 @@ describe('ImageUploader', () => {
       imports: [ImageUploader],
       providers: [
         provideRouter([]),
-        { provide: Location, useValue: { back: locationBackSpy } },
+        { provide: NavigationService, useValue: { back: navigationBackSpy } },
         { provide: ImageService, useValue: { add: addSpy } },
       ],
     }).compileComponents();
@@ -142,7 +142,7 @@ describe('ImageUploader', () => {
     expect(addSpy).toHaveBeenCalledTimes(2);
     expect(addSpy).toHaveBeenCalledWith('album-1', f1);
     expect(addSpy).toHaveBeenCalledWith('album-1', f2);
-    expect(locationBackSpy).toHaveBeenCalled();
+    expect(navigationBackSpy).toHaveBeenCalled();
   });
 
   it('should not save when already saving', async () => {

@@ -1,12 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router, Routes } from '@angular/router';
-import { Location } from '@angular/common';
 import { AlbumForm } from './album-form';
 import { AlbumService } from '../../../core/services/album.service';
 
 const testRoutes: Routes = [
   { path: 'albums', component: AlbumForm },
   { path: 'albums/:id', component: AlbumForm },
+  { path: 'albums/:id/edit', component: AlbumForm, data: { backTo: '/albums' } },
 ];
 
 describe('AlbumForm', () => {
@@ -100,10 +100,12 @@ describe('AlbumForm', () => {
     expect(fixture.componentInstance.name()).toBe('Original');
   });
 
-  it('should update and go back (not navigate forward) when saving an edit', async () => {
+  it('should update and go back to the list when saving an edit', async () => {
     await setup();
-    const navigateSpy = vi.spyOn(TestBed.inject(Router), 'navigate');
-    const backSpy = vi.spyOn(TestBed.inject(Location), 'back');
+    const router = TestBed.inject(Router);
+    const navigateByUrlSpy = vi.spyOn(router, 'navigateByUrl');
+    await router.navigateByUrl('/albums/abc/edit');
+
     const fixture = TestBed.createComponent(AlbumForm);
     fixture.componentRef.setInput('id', 'abc');
     fixture.detectChanges();
@@ -117,14 +119,15 @@ describe('AlbumForm', () => {
     await fixture.whenStable();
 
     expect(updateSpy).toHaveBeenCalledWith('abc', { name: 'Renombrado' });
-    expect(backSpy).toHaveBeenCalled();
-    expect(navigateSpy).not.toHaveBeenCalled();
+    expect(navigateByUrlSpy).toHaveBeenCalledWith('/albums', {
+      replaceUrl: true,
+    });
   });
 
   it('should navigate to the new album detail replacing the form in history', async () => {
     await setup();
-    const navigateSpy = vi.spyOn(TestBed.inject(Router), 'navigate');
-    const backSpy = vi.spyOn(TestBed.inject(Location), 'back');
+    const router = TestBed.inject(Router);
+    const navigateByUrlSpy = vi.spyOn(router, 'navigateByUrl');
     const fixture = TestBed.createComponent(AlbumForm);
     fixture.detectChanges();
 
@@ -136,9 +139,8 @@ describe('AlbumForm', () => {
     await fixture.whenStable();
 
     expect(createSpy).toHaveBeenCalledWith({ name: 'Mi álbum' });
-    expect(navigateSpy).toHaveBeenCalledWith(['/albums', 'new1'], {
+    expect(navigateByUrlSpy).toHaveBeenCalledWith('/albums/new1', {
       replaceUrl: true,
     });
-    expect(backSpy).not.toHaveBeenCalled();
   });
 });
