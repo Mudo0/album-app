@@ -34,13 +34,12 @@
           cdkDrag
           cdkDragBoundary=".canvas"
           [cdkDragFreeDragPosition]="{ x: sticker.x, y: sticker.y }"
-          [style.zIndex]="sticker.z"
           (cdkDragStarted)="onDragStarted(sticker)"
           (cdkDragEnded)="onDragEnded(sticker, $event)"
         >
           <img
             class="sticker-img"
-            [src]="stickerUrl(sticker)"
+            [src]="sticker.objectUrl"
             [alt]="sticker.filename"
             draggable="false"
           />
