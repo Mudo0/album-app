@@ -14,17 +14,13 @@ import { DragDropModule } from '@angular/cdk/drag-drop';
 import type { CdkDragEnd, CdkDragStart } from '@angular/cdk/drag-drop';
 import { filter } from 'rxjs';
 import type { Album } from '../../../../core/models/album.model';
-import type { Image } from '../../../../core/models/image.model';
 import { AlbumService } from '../../services/album.service';
 
 import { BackButton } from '../../../../shared/components/back-button/back-button';
 import { ImageService } from '../../../images/services/image.service';
+import { StickerImage } from '../../../../core/models/stickerImage.viewModel';
 
-interface StickerImage extends Image {
-  x: number;
-  y: number;
-  z: number;
-}
+
 
 @Component({
   selector: 'app-album-detail',
@@ -46,8 +42,6 @@ export class AlbumDetail implements OnInit, OnDestroy {
   readonly stickers = signal<StickerImage[]>([]);
   readonly loading = signal(true);
 
-  private readonly urls = new Map<string, string>();
-
   ngOnInit(): void {
     this.loadData();
 
@@ -59,29 +53,28 @@ export class AlbumDetail implements OnInit, OnDestroy {
       .subscribe(() => this.loadImages());
   }
 
-  stickerUrl(sticker: StickerImage): string {
-    if (!this.urls.has(sticker.id)) {
-      const blob = new Blob([sticker.data], { type: sticker.mimeType });
-      this.urls.set(sticker.id, URL.createObjectURL(blob));
-    }
-    return this.urls.get(sticker.id)!;
-  }
-
   onDragStarted(sticker: StickerImage): void {
-    // Mover al final del array para que quede último en el DOM
-    // y darle el z-index máximo (= cantidad de stickers)
+    // Mover al final del array: sin z-index, el apilamiento lo define el
+    // orden del DOM (último hermano = arriba), y @for lo mantiene sync con el array
     this.stickers.update((current) => {
       const rest = current.filter((s) => s.id !== sticker.id);
       return [...rest, sticker];
     });
-    sticker.z = this.stickers().length;
   }
 
   onDragEnded(sticker: StickerImage, event: CdkDragEnd): void {
     const { x, y } = event.source.getFreeDragPosition();
-    sticker.x = x;
-    sticker.y = y;
+    // Actualización inmutable: nueva referencia => el signal notifica el CD
+    this.stickers.update((current) =>
+      current.map((s) => (s.id === sticker.id ? { ...s, x, y } : s)),
+    );
+    // El orden del array ES el z-order: persistir la secuencia completa
+    // (índice → order) para que el apilamiento sobreviva a la recarga.
+    // Reasignar todos evita órdenes duplicados => sortBy estable
     this.imageService.updatePosition(sticker.id, x, y);
+    this.imageService.updateOrder(
+      this.stickers().map((s, i) => ({ id: s.id, order: i })),
+    );
   }
 
   async deleteImage(imageId: string, event: Event): Promise<void> {
@@ -89,17 +82,13 @@ export class AlbumDetail implements OnInit, OnDestroy {
     event.preventDefault();
     if (!confirm('¿Eliminar esta imagen?')) return;
 
-    const url = this.urls.get(imageId);
-    if (url) URL.revokeObjectURL(url);
-    this.urls.delete(imageId);
-
     await this.imageService.remove(imageId);
-    await this.loadImages();
+    await this.loadImages(); // recrea stickers y revoca las URLs viejas (incluida la eliminada)
   }
 
   ngOnDestroy(): void {
-    for (const url of this.urls.values()) {
-      URL.revokeObjectURL(url);
+    for (const sticker of this.stickers()) {
+      URL.revokeObjectURL(sticker.objectUrl);
     }
   }
 
@@ -115,18 +104,20 @@ export class AlbumDetail implements OnInit, OnDestroy {
     const album = this.album();
     if (!album) return;
 
-    for (const url of this.urls.values()) {
-      URL.revokeObjectURL(url);
-    }
-    this.urls.clear();
-
     const images = await this.imageService.getByAlbum(album.id);
     const stickers: StickerImage[] = images.map((img, i) => ({
       ...img,
       x: img.x ?? 20 + ((i * 55) % 240),
       y: img.y ?? 20 + ((i * 35) % 560),
-      z: i + 1,
+      objectUrl: URL.createObjectURL(new Blob([img.data], { type: img.mimeType })),
     }));
+
+    // Revocar las viejas recién acá: durante el await los stickers visibles
+    // siguen con sus URLs válidas
+    for (const sticker of this.stickers()) {
+      URL.revokeObjectURL(sticker.objectUrl);
+    }
+
     this.stickers.set(stickers);
   }
 }
