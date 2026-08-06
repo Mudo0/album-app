@@ -18,6 +18,7 @@ export const routes: Routes = [
           import('./features/albums/album-form/album-form').then(
             (m) => m.AlbumForm,
           ),
+        data: { backTo: '/albums' },
       },
       {
         path: ':id/upload',
@@ -25,6 +26,7 @@ export const routes: Routes = [
           import('./features/images/image-uploader/image-uploader').then(
             (m) => m.ImageUploader,
           ),
+        data: { backTo: '/albums/:id' },
       },
       {
         path: ':id/edit',
@@ -32,6 +34,7 @@ export const routes: Routes = [
           import('./features/albums/album-form/album-form').then(
             (m) => m.AlbumForm,
           ),
+        data: { backTo: '/albums' },
       },
       {
         path: ':albumId/view/:imageId',
@@ -39,6 +42,7 @@ export const routes: Routes = [
           import('./features/images/image-viewer/image-viewer').then(
             (m) => m.ImageViewer,
           ),
+        data: { backTo: '/albums/:albumId' },
       },
       {
         path: ':id',
@@ -46,6 +50,7 @@ export const routes: Routes = [
           import('./features/albums/album-detail/album-detail').then(
             (m) => m.AlbumDetail,
           ),
+        data: { backTo: '/albums' },
       },
       { path: '**', redirectTo: '/albums' },
     ],
