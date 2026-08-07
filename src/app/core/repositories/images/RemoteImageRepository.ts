@@ -4,25 +4,25 @@ import { Image } from '../../models/image.model';
 
 @Injectable({ providedIn: 'root' })
 export class RemoteImageRepository implements IImageRepository {
-  getByAlbum(albumId: string): Promise<Image[]> {
+  async getByAlbum(albumId: string): Promise<Image[]> {
     throw new Error('Method not implemented.');
   }
-  getById(id: string): Promise<Image | undefined> {
+  async getById(id: string): Promise<Image | undefined> {
     throw new Error('Method not implemented.');
   }
-  getLastByAlbum(albumId: string): Promise<Image | undefined> {
+  async getLastByAlbum(albumId: string): Promise<Image | undefined> {
     throw new Error('Method not implemented.');
   }
-  add(image: Image): Promise<void> {
+  async add(image: Image): Promise<void> {
     throw new Error('Method not implemented.');
   }
-  updatePosition(id: string, x: number, y: number, z?: number): Promise<void> {
+  async updatePosition(id: string, x: number, y: number, z?: number): Promise<void> {
     throw new Error('Method not implemented.');
   }
-  updateOrder(updates: Array<{ id: string; order: number }>): Promise<void> {
+  async updateOrder(updates: Array<{ id: string; order: number }>): Promise<void> {
     throw new Error('Method not implemented.');
   }
-  delete(id: string): Promise<void> {
+  async delete(id: string): Promise<void> {
     throw new Error('Method not implemented.');
   }
 }
