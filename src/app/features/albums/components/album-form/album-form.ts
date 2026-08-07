@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { AlbumService } from '../../services/album.service';
 import { NavigationService } from '../../../../core/services/navigation.service';
 import { BackButton } from '../../../../shared/components/back-button/back-button';
+import type { Album } from '../../../../core/models/album.model';
 
 @Component({
   selector: 'app-album-form',
@@ -23,6 +24,8 @@ export class AlbumForm implements OnInit {
   readonly saving = signal(false);
   readonly loading = signal(false);
 
+  private album?: Album;
+
   get isEditing(): boolean {
     return !!this.id();
   }
@@ -34,6 +37,7 @@ export class AlbumForm implements OnInit {
     this.loading.set(true);
     const album = await this.albumService.getById(albumId);
     if (album) {
+      this.album = album;
       this.name.set(album.name);
     } else {
       // Si el álbum no existe, sacamos al usuario para evitar inconsistencias
@@ -50,7 +54,10 @@ export class AlbumForm implements OnInit {
 
     const albumId = this.id();
     if (albumId) {
-      await this.albumService.update(albumId, { name: trimmed });
+      // Edición sin álbum cargado: no persistir nada
+      if (!this.album) return;
+
+      await this.albumService.updateName(this.album, trimmed);
       // Pantalla transitiva: el back la resuelve por la jerarquía (/albums)
       this.navigation.back();
     } else {
