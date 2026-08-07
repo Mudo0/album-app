@@ -7,6 +7,7 @@ export const imageRepositoryProvider: FactoryProvider = {
   useFactory: () => {
     const localRepo = inject(LocalImageRepository);
 
+   // PARA DESPUES
     //if (premium) = inject(RemoteImageRepository);
 
     return localRepo;

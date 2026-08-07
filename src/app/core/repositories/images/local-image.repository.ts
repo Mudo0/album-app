@@ -16,13 +16,12 @@ export class LocalImageRepository implements ImageRepository {
     return this.db.images.get(id);
   }
 
-  // Devuelve la última imagen para que ImageService pueda calcular el 'order', 'x' e 'y'
   async getLastByAlbum(albumId: string): Promise<Image | undefined> {
     return this.db.images.where('albumId').equals(albumId).last();
   }
 
   async add(image: Image): Promise<void> {
-    // El repositorio recibe la entidad Image ya armada por el servicio superior
+    
     await this.db.images.add(image);
   }
 

@@ -1,4 +1,3 @@
-// core/interfaces/image-repository.interface.ts
 import { Image } from '../../models/image.model';
 import { Position } from '../../models/position.model';
 

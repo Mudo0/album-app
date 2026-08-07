@@ -15,7 +15,8 @@ export class RemoteAlbumRepository implements AlbumRepository {
   }
   async create(album: Album): Promise<void> {
     throw new Error('Method not implemented.');
-  }
+ }
+ // PARA DESPUES
   // async update(album: Album, changes?: Partial<Album>): Promise<void> {
   //   const dataToSave = changes ?? album;
   //   // Si hay changes específicos, hacés PATCH; si mandas todo, hacés PUT (o PATCH con todo)

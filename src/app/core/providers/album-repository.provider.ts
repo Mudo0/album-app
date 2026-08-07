@@ -11,7 +11,8 @@ export const albumRepositoryProvider: FactoryProvider = {
   useFactory: () => {
     const localRepo = inject(LocalAlbumRepository);
 
-    // === PATRÓN STRATEGY ===
+   // === PATRÓN STRATEGY ===
+   // PARA DESPUES
     // Evaluamos el estado del usuario en tiempo de ejecución.
     // Dependiendo del resultado, retornamos la clase concreta adecuada.
 
