@@ -4,10 +4,12 @@ import { provideRouter, withComponentInputBinding, withViewTransitions } from '@
 import { routes } from './app.routes';
 import { albumRepositoryProvider } from './core/providers/album-repository.provider';
 import { HttpClient } from '@angular/common/http';
+import { imageRepositoryProvider } from './core/providers/image-repository.provider';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     albumRepositoryProvider,
+    imageRepositoryProvider,
     HttpClient,
     provideRouter(routes, withComponentInputBinding(), withViewTransitions()),
   ],
