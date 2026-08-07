@@ -24,6 +24,7 @@ describe('AlbumDetail', () => {
       filename: 'foto.jpg',
       mimeType: 'image/jpeg',
       order: 0,
+      position: { x: 0, y: 0 },
       createdAt: new Date(),
       ...overrides,
     };
@@ -69,7 +70,7 @@ describe('AlbumDetail', () => {
       imports: [AlbumDetail],
       providers: [
         provideRouter([]),
-        { provide: AlbumService, useValue: { getById: getByIdSpy } },
+        { provide: AlbumService, useValue: { getAlbumById: getByIdSpy } },
         {
           provide: ImageService,
           useValue: {
@@ -145,8 +146,8 @@ describe('AlbumDetail', () => {
     expect(stickers[0].y).toBeDefined();
   });
 
-  it('should preserve explicit x/y from stored images', async () => {
-    const images = [createMockImage({ x: 150, y: 300 })];
+  it('should preserve explicit position from stored images', async () => {
+    const images = [createMockImage({ position: { x: 150, y: 300 } })];
     getByAlbumSpy.mockResolvedValue(images);
     const fixture = createFixture();
     fixture.detectChanges();
@@ -174,9 +175,9 @@ describe('AlbumDetail', () => {
 
   it('should move dragged sticker to the end without mutating it', async () => {
     const images = [
-      createMockImage({ id: 'img1', x: 10, y: 10 }),
-      createMockImage({ id: 'img2', x: 20, y: 20 }),
-      createMockImage({ id: 'img3', x: 30, y: 30 }),
+      createMockImage({ id: 'img1', position: { x: 10, y: 10 } }),
+      createMockImage({ id: 'img2', position: { x: 20, y: 20 } }),
+      createMockImage({ id: 'img3', position: { x: 30, y: 30 } }),
     ];
     getByAlbumSpy.mockResolvedValue(images);
     const fixture = createFixture();
@@ -197,8 +198,8 @@ describe('AlbumDetail', () => {
 
   it('should update position immutably on drag ended', async () => {
     const images = [
-      createMockImage({ id: 'img1', x: 10, y: 10 }),
-      createMockImage({ id: 'img2', x: 20, y: 20 }),
+      createMockImage({ id: 'img1', position: { x: 10, y: 10 } }),
+      createMockImage({ id: 'img2', position: { x: 20, y: 20 } }),
     ];
     getByAlbumSpy.mockResolvedValue(images);
     const fixture = createFixture();
@@ -222,14 +223,14 @@ describe('AlbumDetail', () => {
     expect(updated.x).toBe(42);
     expect(updated.y).toBe(77);
     expect(original.x).toBe(10); // el objeto original NO se mutó
-    expect(updatePositionSpy).toHaveBeenCalledWith('img1', 42, 77);
+    expect(updatePositionSpy).toHaveBeenCalledWith('img1', { x: 42, y: 77 });
   });
 
   it('should persist z-order (array order) on drag ended', async () => {
     const images = [
-      createMockImage({ id: 'img1', x: 10, y: 10 }),
-      createMockImage({ id: 'img2', x: 20, y: 20 }),
-      createMockImage({ id: 'img3', x: 30, y: 30 }),
+      createMockImage({ id: 'img1', position: { x: 10, y: 10 } }),
+      createMockImage({ id: 'img2', position: { x: 20, y: 20 } }),
+      createMockImage({ id: 'img3', position: { x: 30, y: 30 } }),
     ];
     getByAlbumSpy.mockResolvedValue(images);
     const fixture = createFixture();

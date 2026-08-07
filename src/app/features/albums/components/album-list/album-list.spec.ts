@@ -28,7 +28,10 @@ describe('AlbumList', () => {
 
     return TestBed.configureTestingModule({
       imports: [AlbumList],
-      providers: [provideRouter([]), { provide: AlbumService, useValue: { getAll: getAllSpy } }],
+      providers: [
+        provideRouter([]),
+        { provide: AlbumService, useValue: { getAllAlbums: getAllSpy } },
+      ],
     }).compileComponents();
   }
 

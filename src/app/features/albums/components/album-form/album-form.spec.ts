@@ -36,7 +36,11 @@ describe('AlbumForm', () => {
         provideRouter(testRoutes),
         {
           provide: AlbumService,
-          useValue: { create: createSpy, update: updateSpy, getById: getByIdSpy },
+          useValue: {
+            createNewAlbum: createSpy,
+            updateAlbumName: updateSpy,
+            getAlbumById: getByIdSpy,
+          },
         },
       ],
     }).compileComponents();
@@ -119,7 +123,7 @@ describe('AlbumForm', () => {
     await component.save();
     await fixture.whenStable();
 
-    expect(updateSpy).toHaveBeenCalledWith('abc', { name: 'Renombrado' });
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ id: 'abc' }), 'Renombrado');
     expect(navigateByUrlSpy).toHaveBeenCalledWith('/albums', {
       replaceUrl: true,
     });
