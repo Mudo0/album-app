@@ -71,7 +71,7 @@ export class AlbumDetail implements OnInit, OnDestroy {
     // El orden del array ES el z-order: persistir la secuencia completa
     // (índice → order) para que el apilamiento sobreviva a la recarga.
     // Reasignar todos evita órdenes duplicados => sortBy estable
-    this.imageService.updatePosition(sticker.id, x, y);
+    this.imageService.updatePosition(sticker.id, { x, y });
     this.imageService.updateOrder(
       this.stickers().map((s, i) => ({ id: s.id, order: i })),
     );
@@ -107,8 +107,8 @@ export class AlbumDetail implements OnInit, OnDestroy {
     const images = await this.imageService.getByAlbum(album.id);
     const stickers: StickerImage[] = images.map((img, i) => ({
       ...img,
-      x: img.x ?? 20 + ((i * 55) % 240),
-      y: img.y ?? 20 + ((i * 35) % 560),
+      x: img.position?.x ?? 20 + ((i * 55) % 240),
+      y: img.position?.y ?? 20 + ((i * 35) % 560),
       objectUrl: URL.createObjectURL(new Blob([img.data], { type: img.mimeType })),
     }));
 

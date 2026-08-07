@@ -7,7 +7,7 @@ import { Position } from '../../../core/models/position.model';
 export class ImageService {
   private readonly imageRepo = inject(IMAGE_REPOSITORY);
 
-  async addImage(albumId: string, file: File): Promise<Image> {
+  async add(albumId: string, file: File): Promise<Image> {
     const data = await file.arrayBuffer();
     const blob = new Blob([data], { type: file.type });
 
@@ -47,7 +47,7 @@ export class ImageService {
     return await this.imageRepo.getByAlbum(albumId);
   }
 
-  async deleteImage(id: string): Promise<void> {
+  async remove(id: string): Promise<void> {
     await this.imageRepo.delete(id);
   }
 }

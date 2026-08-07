@@ -7,7 +7,7 @@ export interface ImageRepository {
   getById(id: string): Promise<Image | undefined>;
   getLastByAlbum(albumId: string): Promise<Image | undefined>;
   add(image: Image): Promise<void>;
-  updatePosition(id: string, position: Position, z?: number): Promise<void>;
+  updatePosition(id: string, position: Position): Promise<void>;
   updateOrder(updates: Array<{ id: string; order: number }>): Promise<void>;
   delete(id: string): Promise<void>;
 }

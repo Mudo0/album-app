@@ -46,7 +46,7 @@ export class AlbumList implements OnInit {
   async deleteAlbum(albumId: string): Promise<void> {
     this.closeMenu();
     if (!confirm('¿Eliminar este álbum y todas sus imágenes?')) return;
-    await this.albumService.delete(albumId);
+    await this.albumService.remove(albumId);
     await this.loadAlbums();
   }
 

@@ -17,7 +17,7 @@ export class RemoteImageRepository implements ImageRepository {
   async add(image: Image): Promise<void> {
     throw new Error('Method not implemented.');
   }
-  async updatePosition(id: string, position: Position, z?: number): Promise<void> {
+  async updatePosition(id: string, position: Position): Promise<void> {
     throw new Error('Method not implemented.');
   }
   async updateOrder(updates: Array<{ id: string; order: number }>): Promise<void> {

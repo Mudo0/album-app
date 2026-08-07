@@ -7,11 +7,11 @@ export class AlbumService {
   // Inyectamos el Token, Angular nos devolverá la instancia que decidió el Factory
   private readonly albumRepo = inject(ALBUM_REPOSITORY);
 
-  async getAllAlbums(): Promise<Album[]> {
+  async getAll(): Promise<Album[]> {
     return this.albumRepo.getAll();
   }
 
-  async createNewAlbum(data: Omit<Album, 'id' | 'createdAt' | 'updatedAt'>): Promise<Album> {
+  async create(data: Omit<Album, 'id' | 'createdAt' | 'updatedAt'>): Promise<Album> {
     const now = new Date();
     const newAlbum: Album = {
       ...data,
@@ -25,19 +25,19 @@ export class AlbumService {
     return newAlbum;
   }
 
-  async getAlbumById(id: string): Promise<Album | undefined> {
+  async getById(id: string): Promise<Album | undefined> {
     return await this.albumRepo.getById(id);
   }
-  async updateAlbumName(album: Album, newName: string): Promise<void> {
+  async updateName(album: Album, newName: string): Promise<void> {
     const changes: Partial<Album> = { name: newName };
     await this.albumRepo.update(album, changes);
   }
 
-  async updateFullAlbum(album: Album): Promise<void> {
+  async updateFull(album: Album): Promise<void> {
     await this.albumRepo.update(album);
   }
 
-  async removeAlbum(id: string): Promise<void> {
+  async remove(id: string): Promise<void> {
     await this.albumRepo.delete(id);
   }
 }
