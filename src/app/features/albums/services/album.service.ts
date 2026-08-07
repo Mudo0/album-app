@@ -1,28 +1,43 @@
 import { Injectable, inject } from '@angular/core';
-import type { Album } from '../../../core/models/album.model';
-import { DbService } from '../../../core/services/db.service';
+import { ALBUM_REPOSITORY } from '../../../core/tokens/album-repository.token';
+import { Album } from '../../../core/models/album.model';
 
 @Injectable({ providedIn: 'root' })
 export class AlbumService {
-  private readonly db = inject(DbService);
+  // Inyectamos el Token, Angular nos devolverá la instancia que decidió el Factory
+  private readonly albumRepo = inject(ALBUM_REPOSITORY);
 
-  getAll(): Promise<Album[]> {
-    return this.db.getAllAlbums();
+  async getAllAlbums(): Promise<Album[]> {
+    return this.albumRepo.getAll();
   }
 
-  getById(id: string): Promise<Album | undefined> {
-    return this.db.getAlbum(id);
+  async createNewAlbum(data: Omit<Album, 'id' | 'createdAt' | 'updatedAt'>): Promise<Album> {
+    const now = new Date();
+    const newAlbum: Album = {
+      ...data,
+      id: crypto.randomUUID(),
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await this.albumRepo.create(newAlbum);
+
+    return newAlbum;
   }
 
-  create(data: Omit<Album, 'id' | 'createdAt' | 'updatedAt'>): Promise<Album> {
-    return this.db.createAlbum(data);
+  async getAlbumById(id: string): Promise<Album | undefined> {
+    return await this.albumRepo.getById(id);
+  }
+  async updateAlbumName(album: Album, newName: string): Promise<void> {
+    const changes: Partial<Album> = { name: newName };
+    await this.albumRepo.update(album, changes);
   }
 
-  update(id: string, changes: Partial<Pick<Album, 'name' | 'coverImageId'>>): Promise<void> {
-    return this.db.updateAlbum(id, changes);
+  async updateFullAlbum(album: Album): Promise<void> {
+    await this.albumRepo.update(album);
   }
 
-  delete(id: string): Promise<void> {
-    return this.db.deleteAlbum(id);
+  async removeAlbum(id: string): Promise<void> {
+    await this.albumRepo.delete(id);
   }
 }
