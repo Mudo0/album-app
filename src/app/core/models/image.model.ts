@@ -1,3 +1,5 @@
+import { Position } from './position.model';
+
 export interface Image {
   id: string;
   albumId: string;
@@ -6,7 +8,6 @@ export interface Image {
   filename: string;
   mimeType: string;
   order: number;
-  x?: number;
-  y?: number;
+  position: Position;
   createdAt: Date;
 }

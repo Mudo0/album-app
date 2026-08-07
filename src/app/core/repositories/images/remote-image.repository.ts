@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { ImageRepository } from '../../interfaces/repositories/image.repository';
 import { Image } from '../../models/image.model';
+import { Position } from '../../models/position.model';
 
 @Injectable({ providedIn: 'root' })
 export class RemoteImageRepository implements ImageRepository {
@@ -16,7 +17,7 @@ export class RemoteImageRepository implements ImageRepository {
   async add(image: Image): Promise<void> {
     throw new Error('Method not implemented.');
   }
-  async updatePosition(id: string, x: number, y: number, z?: number): Promise<void> {
+  async updatePosition(id: string, position: Position, z?: number): Promise<void> {
     throw new Error('Method not implemented.');
   }
   async updateOrder(updates: Array<{ id: string; order: number }>): Promise<void> {

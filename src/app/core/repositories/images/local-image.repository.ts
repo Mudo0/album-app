@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Image } from '../../models/image.model';
 import { LocalDbContext } from '../../services/LocalDbContext';
 import { ImageRepository } from '../../interfaces/repositories/image.repository';
+import { Position } from '../../models/position.model';
 
 @Injectable({ providedIn: 'root' })
 export class LocalImageRepository implements ImageRepository {
@@ -25,8 +26,8 @@ export class LocalImageRepository implements ImageRepository {
     await this.db.images.add(image);
   }
 
-  async updatePosition(id: string, x: number, y: number): Promise<void> {
-    await this.db.images.update(id, { x, y });
+  async updatePosition(id: string, position: Position): Promise<void> {
+    await this.db.images.update(id, { position });
   }
 
   async updateOrder(updates: Array<{ id: string; order: number }>): Promise<void> {
