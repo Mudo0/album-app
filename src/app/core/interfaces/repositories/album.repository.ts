@@ -1,6 +1,6 @@
 import { Album } from '../../models/album.model';
 
-export interface IAlbumRepository {
+export interface AlbumRepository {
   getAll(): Promise<Album[]>;
   getById(id: string): Promise<Album | undefined>;
   create(album: Album): Promise<void>;
