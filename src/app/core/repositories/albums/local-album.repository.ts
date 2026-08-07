@@ -15,8 +15,9 @@ export class LocalAlbumRepository implements AlbumRepository {
   async create(album: Album): Promise<void> {
     await this.db.albums.add(album);
   }
-  async update(album: Album): Promise<void> {
-    await this.db.albums.update(album.id, album);
+  async update(album: Album, changes?: Partial<Album>): Promise<void> {
+    const dataToSave = changes ?? album;
+    await this.db.albums.update(album.id, { ...dataToSave, updatedAt: new Date() });
   }
   async delete(id: string): Promise<void> {
     await this.db.transaction('rw', this.db.albums, this.db.images, async () => {
