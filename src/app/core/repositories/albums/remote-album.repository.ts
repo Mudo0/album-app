@@ -4,6 +4,9 @@ import { Album } from '../../models/album.model';
 
 @Injectable({ providedIn: 'root' })
 export class RemoteAlbumRepository implements AlbumRepository {
+  update(album: Album, changes?: Partial<Album>): Promise<void> {
+   throw new Error('Method not implemented.');
+  }
   async getAll(): Promise<Album[]> {
     throw new Error('Method not implemented.');
   }
