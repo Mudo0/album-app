@@ -1,7 +1,7 @@
 // core/interfaces/image-repository.interface.ts
 import { Image } from '../../models/image.model';
 
-export interface IImageRepository {
+export interface ImageRepository {
   getByAlbum(albumId: string): Promise<Image[]>;
   getById(id: string): Promise<Image | undefined>;
   getLastByAlbum(albumId: string): Promise<Image | undefined>;
