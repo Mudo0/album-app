@@ -1,0 +1,28 @@
+import { Injectable } from '@angular/core';
+import { IImageRepository } from '../../interfaces/repositories/IImageRepository';
+import { Image } from '../../models/image.model';
+
+@Injectable({ providedIn: 'root' })
+export class RemoteImageRepository implements IImageRepository {
+  getByAlbum(albumId: string): Promise<Image[]> {
+    throw new Error('Method not implemented.');
+  }
+  getById(id: string): Promise<Image | undefined> {
+    throw new Error('Method not implemented.');
+  }
+  getLastByAlbum(albumId: string): Promise<Image | undefined> {
+    throw new Error('Method not implemented.');
+  }
+  add(image: Image): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  updatePosition(id: string, x: number, y: number, z?: number): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  updateOrder(updates: Array<{ id: string; order: number }>): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+  delete(id: string): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+}
