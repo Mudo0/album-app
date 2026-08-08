@@ -1,14 +1,15 @@
 # ESCALA
 
-[ ] - opcional guardado local(gratis) / en nube (premium)
+[ ] - Investigar si se puede hacer un adaptador del OS de android a la PWA.
 [ ] - Backend para usuarios, suscripcion, pagos,etc.
 [ ] - migrar indexdb a backend -> postgres.
 [ ] - Guardado en la nube
-1- subir imagen
-2- convertir a webp
-3- guardar original (blob) en cloud
-4- guardar thumbnail webp en indexeddb
-5- si hace falta copiar la imagen ir a pedir la original al backend (cloud)
+
+- 1. subir imagen
+- 2. convertir a webp
+- 3. guardar original (blob) en cloud
+- 4. guardar thumbnail webp en indexeddb
+- 5. si hace falta copiar la imagen ir a pedir la original al backend (cloud)
 
 ### IMAGE
 
@@ -38,10 +39,9 @@
 
    Solución: Puedes almacenar los archivos seleccionados temporalmente en IndexedDB. Si el upload falla, la PWA recupera los archivos desde la base local y reanuda la subida cuando vuelva la conexión, sin obligar al usuario a abrir la galería de nuevo.
 
-# features a agregar
+# FEATURES A AGREGAR
 
-- [ ] usuarios ???
-- [ ] definir un limite de almacenamiento por usuario (limite gratuito / pagado)
+- [ ] usuarios para manejar suscripciones y pagos
 - [ ] etiquetas para los albumes y stickers
 - [ ] filtro por etiquetas
 - [ ] auto-organizacion
@@ -51,7 +51,7 @@
 
 ## Edicion de stickers
 
-- [ ] añadir limite preciso de stickers png
+- [ ] añadir limite preciso (bordes) de stickers png
 - [ ] cambiar tamaño
 - [ ] rotacion
 - [ ] añadir decoracion/bordes
@@ -66,7 +66,7 @@
 
 # bugs para corregir
 
-- [ ] al salir del album no recuerda la posicion z de los stickers
+- [x] al salir del album no recuerda la posicion z de los stickers
 - [ ] guardado del album al cerrar repentinamente, onDestroy y guardar pocas veces, no con cada drag-drop (utilizar debounce)
 - [ ] al cancelar el drag con esc, volver, cerrar la pestaña se puede bugear
 
