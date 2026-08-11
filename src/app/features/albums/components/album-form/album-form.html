@@ -1,0 +1,32 @@
+<header class="header">
+  <app-back-button />
+  <h1 class="title">{{ isEditing ? 'Editar álbum' : 'Nuevo álbum' }}</h1>
+  <div class="spacer"></div>
+</header>
+
+<main class="main">
+  @if (loading()) {
+    <p class="status">Cargando...</p>
+  } @else {
+    <label class="field">
+      <span class="field-label">Nombre</span>
+      <input
+        class="field-input"
+        type="text"
+        placeholder="Ej: Vacaciones 2026"
+        [ngModel]="name()"
+        (ngModelChange)="name.set($event)"
+        maxlength="40"
+        autofocus
+      />
+    </label>
+
+    <button
+      class="save-btn"
+      [disabled]="saving() || !name().trim()"
+      (click)="save()"
+    >
+      {{ saving() ? 'Guardando...' : isEditing ? 'Guardar cambios' : 'Crear álbum' }}
+    </button>
+  }
+</main>

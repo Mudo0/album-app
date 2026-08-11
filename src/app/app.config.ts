@@ -1,11 +1,16 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import type { ApplicationConfig } from '@angular/core';
+import { provideRouter, withComponentInputBinding, withViewTransitions } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
 
 import { routes } from './app.routes';
+import { albumRepositoryProvider } from './core/providers/album-repository.provider';
+import { imageRepositoryProvider } from './core/providers/image-repository.provider';
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideBrowserGlobalErrorListeners(),
-    provideRouter(routes)
-  ]
+    albumRepositoryProvider,
+    imageRepositoryProvider,
+    provideHttpClient(),
+    provideRouter(routes, withComponentInputBinding(), withViewTransitions()),
+  ],
 };

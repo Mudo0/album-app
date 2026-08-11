@@ -1,0 +1,59 @@
+<header class="header">
+  <app-back-button />
+  <h1 class="title">Agregar imágenes</h1>
+  <div class="spacer"></div>
+</header>
+
+<main class="main">
+  <input
+    #fileInput
+    type="file"
+    accept="image/*"
+    multiple
+    hidden
+    (change)="onFilesSelected($event)"
+  />
+
+  @if (files().length === 0) {
+    <div class="empty">
+      <div class="empty-icon">📸</div>
+      <p class="empty-title">Seleccioná tus fotos</p>
+      <p class="empty-text">
+        Podés elegir varias imágenes de tu galería o sacar una foto con la cámara
+      </p>
+    </div>
+  }
+
+  @if (files().length > 0) {
+    <div class="preview-grid">
+      @for (preview of files(); track preview.url; let i = $index) {
+        <div class="preview-item">
+          <img
+            class="preview-img"
+            [src]="preview.url"
+            [alt]="'Vista previa ' + (i + 1)"
+          />
+          <button
+            class="preview-remove"
+            (click)="removeFile(i)"
+            aria-label="Quitar imagen"
+          >
+            ✕
+          </button>
+        </div>
+      }
+    </div>
+  }
+</main>
+
+<footer class="footer">
+  <button class="pick-btn" (click)="openPicker()" [disabled]="saving()">
+    {{ files().length > 0 ? 'Agregar más' : 'Seleccionar imágenes' }}
+  </button>
+
+  @if (files().length > 0) {
+    <button class="save-btn" (click)="save()" [disabled]="saving()">
+      {{ saving() ? 'Guardando...' : 'Guardar ' + files().length + ' imagen' + (files().length > 1 ? 'es' : '') }}
+    </button>
+  }
+</footer>

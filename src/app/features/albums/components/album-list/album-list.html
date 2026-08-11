@@ -1,0 +1,67 @@
+<header class="header">
+  <h1 class="title">Álbumes</h1>
+  <a class="fab" routerLink="/albums/new" aria-label="Crear álbum">
+    <span class="fab-icon">+</span>
+  </a>
+</header>
+
+<main class="main">
+  @if (loading()) {
+    <p class="status">Cargando álbumes...</p>
+  } @else if (albums().length === 0) {
+    <div class="empty">
+      <div class="empty-icon">📒</div>
+      <p class="empty-title">No tenés álbumes todavía</p>
+      <p class="empty-text">
+        Creá tu primer cuaderno para empezar a organizar tus fotos
+      </p>
+      <a class="empty-cta" routerLink="/albums/new">Crear álbum</a>
+    </div>
+  } @else {
+    <div class="grid">
+      @for (album of albums(); track album.id) {
+        <div class="card">
+          <a
+            class="card-link"
+            [routerLink]="['/albums', album.id]"
+            [attr.aria-label]="'Abrir álbum ' + album.name"
+          >
+            <div
+              class="card-cover"
+              [style.background]="coverColor(album.id)"
+            >
+              @if (album.coverImageId) {
+                <span class="card-badge">📷</span>
+              }
+            </div>
+            <span class="card-name">{{ album.name }}</span>
+          </a>
+
+          <button
+            class="card-menu-btn"
+            (click)="toggleMenu(album.id, $event)"
+            aria-label="Opciones del álbum"
+          >
+            ⋯
+          </button>
+
+          @if (openMenuId() === album.id) {
+            <div class="card-menu">
+              <button class="card-menu-item" (click)="editAlbum(album.id)">
+                ✏️ Editar
+              </button>
+              <button class="card-menu-item card-menu-item--danger" (click)="deleteAlbum(album.id)">
+                🗑️ Eliminar
+              </button>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Overlay para cerrar el menú al tocar afuera -->
+  @if (openMenuId()) {
+    <div class="menu-overlay" (click)="closeMenu()"></div>
+  }
+</main>
