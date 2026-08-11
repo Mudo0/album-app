@@ -1,5 +1,28 @@
 apply plugin: 'com.android.application'
 
+// ── Versión desde package.json ─────────────────────────────────────────────
+// La fuente de verdad de la versión es package.json (la maneja scripts/release.js).
+// `npx cap sync` NO actualiza versionCode/versionName: verificado en el source
+// del CLI (@capacitor/cli/dist/tasks/copy.js) — solo copia assets web. Si no los
+// derivamos acá, el APK siempre sale como versión "1.0" / versionCode 1.
+def pkgVersion = new groovy.json.JsonSlurper().parse(file('../../package.json')).version
+def versionMatcher = (pkgVersion =~ /^(\d+)\.(\d+)\.(\d+)(?:-([a-z]+)\.(\d+))?$/)
+if (!versionMatcher) {
+    throw new GradleException("Versión inválida en package.json: ${pkgVersion}")
+}
+def vMajor = versionMatcher[0][1] as int
+def vMinor = versionMatcher[0][2] as int
+def vPatch = versionMatcher[0][3] as int
+def vStage = versionMatcher[0][4]                    // null si es estable
+def vStageNum = versionMatcher[0][5] ? versionMatcher[0][5] as int : 0
+// versionCode siempre creciente por release:
+//   base X.Y.Z  → X*1000000 + Y*10000 + Z*100
+//   etapa       → alpha: 10+N, beta: 20+N, rc: 30+N, estable: 50
+//   ej: 0.0.0-alpha.1 → 11, 0.0.0-beta.1 → 21, 0.0.0 → 50, 1.0.0 → 1000050
+def vStageCode = vStage == null ? 50 : (['alpha': 10, 'beta': 20, 'rc': 30][vStage] + vStageNum)
+def appVersionCode = vMajor * 1000000 + vMinor * 10000 + vPatch * 100 + vStageCode
+def appVersionName = pkgVersion
+
 android {
     namespace = "com.mudo.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +30,8 @@ android {
         applicationId "com.mudo.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -25,7 +48,7 @@ android {
     // Renombra el APK con la versión (misma regla que el CI):
     //   alpha/beta -> album-app-alpha.1.apk (el X.Y.Z es provisional, no va)
     //   rc/estable -> album-app-v1.0.0.apk   (la versión ya está fijada)
-    // El versionName lo actualiza `npx cap sync` desde package.json.
+    // El versionName/versionCode se derivan de package.json al inicio de este archivo.
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             def vn = variant.versionName
