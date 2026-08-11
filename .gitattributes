@@ -1,0 +1,8 @@
+# Normalización de fin de línea: el repo guarda siempre LF.
+# `eol=lf` fuerza LF en el working copy (Windows incluido) y elimina
+# los warnings de conversión CRLF/LF.
+* text=auto eol=lf
+
+# Scripts nativos de Windows necesitan CRLF para funcionar
+*.bat text eol=crlf
+*.cmd text eol=crlf

@@ -7,14 +7,16 @@ const DISCORD_SCRIPT = path.join(__dirname, 'discord.js');
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function git(args, options = {}) {
-  return spawnSync('git', args, { stdio: 'inherit', cwd: ROOT, ...options });
-}
-
 function gitCapture(args) {
   const result = spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
   if (result.status !== 0) throw new Error(`git ${args.join(' ')} falló`);
   return result.stdout.trim();
+}
+
+function gitQuiet(args) {
+  // Ejecuta git capturando la salida en vez de heredar la consola,
+  // así el script controla qué se muestra y qué no
+  return spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
 }
 
 function checkGitState() {
@@ -77,12 +79,14 @@ function getHeadTags() {
 }
 
 function pushCommitsAndTags() {
-  const push = git(['push']);
-  if (push.status !== 0) throw new Error('git push falló');
+  // --quiet suprime el ruido del transporte (Enumerating/Counting/Writing...);
+  // los errores igual salen en stderr y se propagan como excepción
+  const push = gitQuiet(['push', '--quiet']);
+  if (push.status !== 0) throw new Error(push.stderr.trim() || 'git push falló');
 
   // Los tags (vX.Y.Z-etapa.N) disparan el workflow en GitHub
-  const tags = git(['push', '--tags']);
-  if (tags.status !== 0) throw new Error('git push --tags falló');
+  const tags = gitQuiet(['push', '--tags', '--quiet']);
+  if (tags.status !== 0) throw new Error(tags.stderr.trim() || 'git push --tags falló');
 }
 
 function buildDiscordMessage(commits) {
@@ -152,7 +156,7 @@ async function main() {
 
     try {
       pushCommitsAndTags();
-      console.log('✅  Push completado.');
+      console.log(`✅  Push completado (${getBranch()} → ${getUpstream()}).`);
       notifyDiscord(buildDiscordMessage(commits));
       process.exit(0);
     } catch (err) {
@@ -178,9 +182,19 @@ async function main() {
     execSync('git add .', { stdio: 'inherit', cwd: ROOT });
 
     console.log(`⏳  Creando commit: "${commitMessage}"...`);
-    // spawnSync con args en array: el mensaje puede tener comillas o caracteres raros
-    const commit = git(['commit', '-m', commitMessage]);
-    if (commit.status !== 0) throw new Error('git commit falló');
+    // spawnSync con args en array: el mensaje puede tener comillas o caracteres raros.
+    // --quiet suprime el resumen de git; el script muestra el suyo más legible
+    const commit = gitQuiet(['commit', '--quiet', '-m', commitMessage]);
+    if (commit.status !== 0) {
+      throw new Error(commit.stderr.trim() || 'git commit falló');
+    }
+
+    try {
+      const shortHash = gitCapture(['rev-parse', '--short', 'HEAD']);
+      console.log(`✅  Commit creado: ${shortHash}`);
+    } catch {
+      console.log('✅  Commit creado.');
+    }
 
     // El commit nuevo ya está incluido en el rango upstream..HEAD
     const commits = getPendingCommits();
@@ -188,7 +202,7 @@ async function main() {
     console.log('⏳  Subiendo al repositorio...');
     pushCommitsAndTags();
 
-    console.log('✅  Push completado.');
+    console.log(`✅  Push completado (${getBranch()} → ${getUpstream()}).`);
     notifyDiscord(buildDiscordMessage(commits));
     process.exit(0);
   } catch (err) {
