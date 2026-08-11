@@ -62,13 +62,36 @@ jobs:
       - name: Dar permisos a Gradle
         run: chmod +x android/gradlew
 
-      # 9. Compilar el APK de Android
-      - name: Compilar APK (Debug)
+      # 9. Configurar la firma: decodifica el keystore desde los secrets y
+      #    escribe android/keystore.properties (lo lee build.gradle).
+      #    Si el secret no está (p.ej. PR externo), cae a debug signing.
+      - name: Configurar firma del APK
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "Sin keystore en secrets: se usará debug signing"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/keystore.jks
+          cat > android/keystore.properties <<EOF
+          storeFile=../keystore.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      # 10. Compilar el APK de Android (Release, firmado con el keystore real)
+      - name: Compilar APK (Release)
         run: |
           cd android
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
 
-      # 10. Tomar el APK generado por Gradle. Ya viene con el nombre por versión
+      # 11. Tomar el APK generado por Gradle. Ya viene con el nombre por versión
       #     (album-app-alpha.1.apk en alpha/beta, album-app-v1.0.0.apk en rc/estable,
       #     definido en android/app/build.gradle con la misma regla).
       #     Se copia también a album-app.apk (nombre fijo) para el link estable
@@ -77,17 +100,17 @@ jobs:
         id: apk
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          APK_PATH=$(find android/app/build/outputs/apk/debug -maxdepth 1 -name '*.apk' | head -n 1)
+          APK_PATH=$(find android/app/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)
           if [ -z "$APK_PATH" ]; then
             echo "No se encontró el APK generado"
             exit 1
           fi
           APK_NAME=$(basename "$APK_PATH")
-          cp "$APK_PATH" android/app/build/outputs/apk/debug/album-app.apk
+          cp "$APK_PATH" android/app/build/outputs/apk/release/album-app.apk
           echo "apk_name=${APK_NAME}" >> "$GITHUB_OUTPUT"
           echo "APK final: ${APK_NAME}"
 
-      # 11. Crear el Release con el APK (solo cuando el run viene de un tag v*).
+      # 12. Crear el Release con el APK (solo cuando el run viene de un tag v*).
       #     Links de descarga en 1 click:
       #       Por versión: https://github.com/<repo>/releases/download/v1.0.0-alpha.1/album-app-alpha.1.apk
       #       Última:      https://github.com/<repo>/releases/latest/download/album-app.apk
@@ -102,11 +125,11 @@ jobs:
             Descargar: [${{ steps.apk.outputs.apk_name }}](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.apk.outputs.apk_name }})
             Última: [album-app.apk](https://github.com/${{ github.repository }}/releases/latest/download/album-app.apk)
           files: |
-            android/app/build/outputs/apk/debug/${{ steps.apk.outputs.apk_name }}
-            android/app/build/outputs/apk/debug/album-app.apk
+            android/app/build/outputs/apk/release/${{ steps.apk.outputs.apk_name }}
+            android/app/build/outputs/apk/release/album-app.apk
           make_latest: true
 
-      # 12. Notificación a Discord (canal #release): taggea al rol de testers + link directo
+      # 13. Notificación a Discord (canal #release): taggea al rol de testers + link directo
       #     La URL se construye de forma determinística (repo + tag + nombre del APK),
       #     sin depender del output 'assets' de action-gh-release (puede venir vacío).
       - name: Enviar notificación a Discord
@@ -119,7 +142,7 @@ jobs:
             -H "Content-Type: application/json" \
             -d "{\"content\":\"<@&1536481832680431659> 🚀 **Nuevo APK ${{ github.ref_name }} listo!** – [Descargar](${APK_URL})\", \"allowed_mentions\": {\"roles\": [\"1536481832680431659\"]}}"
 
-      # 13. Enviar APK por Telegram (documento adjunto + link directo).
+      # 14. Enviar APK por Telegram (documento adjunto + link directo).
       #     Misma URL determinística que en Discord (sin parsear outputs de terceros).
       - name: Enviar APK por Telegram
         if: startsWith(github.ref, 'refs/tags/')
@@ -132,4 +155,4 @@ jobs:
             Repositorio: ${{ github.repository }}
             Descargar:
             https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.apk.outputs.apk_name }}
-          document: android/app/build/outputs/apk/debug/${{ steps.apk.outputs.apk_name }}
+          document: android/app/build/outputs/apk/release/${{ steps.apk.outputs.apk_name }}
