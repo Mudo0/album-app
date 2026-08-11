@@ -22,6 +22,20 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    // Renombra el APK con la versión (misma regla que el CI):
+    //   alpha/beta -> album-app-alpha.1.apk (el X.Y.Z es provisional, no va)
+    //   rc/estable -> album-app-v1.0.0.apk   (la versión ya está fijada)
+    // El versionName lo actualiza `npx cap sync` desde package.json.
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def vn = variant.versionName
+            if (vn ==~ /.*-(alpha|beta)\.\d+/) {
+                outputFileName = "album-app-${vn.substring(vn.lastIndexOf('-') + 1)}.apk"
+            } else {
+                outputFileName = "album-app-v${vn}.apk"
+            }
+        }
+    }
 }
 
 repositories {
