@@ -1,0 +1,135 @@
+name: Compilar APK Android
+
+on:
+  push:
+    tags:
+      - 'v*' # Solo cuando publiques una versión con un tag (vX.Y.Z[-etapa.N])
+  workflow_dispatch: # Manual: compila y testea sin publicar release
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # Necesario para crear el Release con el APK
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Descargar el código del repositorio
+      - name: Checkout del código
+        uses: actions/checkout@v6
+
+      # 2. Configurar el entorno de Node.js (mismo major que el local: 24)
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      # 3. Configurar Java (requerido para compilar Android).
+      #    Capacitor 7+ compila capacitor-android con sourceCompatibility 21,
+      #    así que JDK 17 ya no alcanza (error "invalid source release: 21").
+      - name: Configurar Java JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      # 4. Cache de Gradle (acelera mucho los builds de Android)
+      - name: Cache de Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      # 5. Instalar dependencias de Node
+      - name: Instalar dependencias
+        run: npm ci
+
+      # 6. Tests unitarios (vitest + jsdom, como en local)
+      - name: Correr tests unitarios
+        run: npm test
+
+      # 7. Compilar la app Web en Angular y sincronizar con Capacitor
+      - name: Build de Angular y Capacitor Sync
+        run: |
+          npm run build
+          npx cap sync android
+
+      # 8. Dar permisos de ejecución a Gradle
+      - name: Dar permisos a Gradle
+        run: chmod +x android/gradlew
+
+      # 9. Compilar el APK de Android
+      - name: Compilar APK (Debug)
+        run: |
+          cd android
+          ./gradlew assembleDebug
+
+      # 10. Tomar el APK generado por Gradle. Ya viene con el nombre por versión
+      #     (album-app-alpha.1.apk en alpha/beta, album-app-v1.0.0.apk en rc/estable,
+      #     definido en android/app/build.gradle con la misma regla).
+      #     Se copia también a album-app.apk (nombre fijo) para el link estable
+      #     de "última versión": releases/latest/download/album-app.apk
+      - name: Preparar APK para el release
+        id: apk
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          APK_PATH=$(find android/app/build/outputs/apk/debug -maxdepth 1 -name '*.apk' | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "No se encontró el APK generado"
+            exit 1
+          fi
+          APK_NAME=$(basename "$APK_PATH")
+          cp "$APK_PATH" android/app/build/outputs/apk/debug/album-app.apk
+          echo "apk_name=${APK_NAME}" >> "$GITHUB_OUTPUT"
+          echo "APK final: ${APK_NAME}"
+
+      # 11. Crear el Release con el APK (solo cuando el run viene de un tag v*).
+      #     Links de descarga en 1 click:
+      #       Por versión: https://github.com/<repo>/releases/download/v1.0.0-alpha.1/album-app-alpha.1.apk
+      #       Última:      https://github.com/<repo>/releases/latest/download/album-app.apk
+      - name: Crear Release con el APK
+        id: release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          name: APK ${{ github.ref_name }}
+          body: |
+            APK para la versión ${{ github.ref_name }}.
+            Descargar: [${{ steps.apk.outputs.apk_name }}](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.apk.outputs.apk_name }})
+            Última: [album-app.apk](https://github.com/${{ github.repository }}/releases/latest/download/album-app.apk)
+          files: |
+            android/app/build/outputs/apk/debug/${{ steps.apk.outputs.apk_name }}
+            android/app/build/outputs/apk/debug/album-app.apk
+          make_latest: true
+
+      # 12. Notificación a Discord (canal #release): taggea al rol de testers + link directo
+      #     La URL se construye de forma determinística (repo + tag + nombre del APK),
+      #     sin depender del output 'assets' de action-gh-release (puede venir vacío).
+      - name: Enviar notificación a Discord
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          DISCORD_WEBHOOK_RELEASE: ${{ secrets.DISCORD_WEBHOOK_RELEASE }}
+          APK_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.apk.outputs.apk_name }}
+        run: |
+          curl -sSf -X POST "$DISCORD_WEBHOOK_RELEASE" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\":\"<@&1536481832680431659> 🚀 **Nuevo APK ${{ github.ref_name }} listo!** – [Descargar](${APK_URL})\", \"allowed_mentions\": {\"roles\": [\"1536481832680431659\"]}}"
+
+      # 13. Enviar APK por Telegram (documento adjunto + link directo).
+      #     Misma URL determinística que en Discord (sin parsear outputs de terceros).
+      - name: Enviar APK por Telegram
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: appleboy/telegram-action@v1.0.1
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message: |
+            🎉 Nuevo APK ${{ github.ref_name }}!
+            Repositorio: ${{ github.repository }}
+            Descargar:
+            https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.apk.outputs.apk_name }}
+          document: android/app/build/outputs/apk/debug/${{ steps.apk.outputs.apk_name }}
