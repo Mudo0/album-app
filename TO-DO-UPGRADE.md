@@ -1,0 +1,4 @@
+- [ ] Implementar la lógica de migración de datos locales a remotos para el proceso de upgrade de usuario
+- [ ] opcional guardado local(gratis) / en nube (premium)
+- [ ] definir un limite de almacenamiento por usuario (limite gratuito / pagado)
+- [ ] definir un limite de albumes (gratis/pago)
