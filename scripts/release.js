@@ -49,7 +49,7 @@ function restoreVersionSnapshot(originalPkg, originalLock) {
 // ── Versionado por etapas ───────────────────────────────────────────────────
 // Máquina de estados según la convención vMAJOR.MINOR.PATCH[-etapa.N]:
 //
-//   v1.0.0 (estable) + alpha + minor  -> v1.1.0-alpha.1
+//   v1.0.0 (estable)  + alpha/beta/rc -> v1.0.0-alpha.1   (arranca etapa: base intacta, N=1)
 //   v1.0.0-alpha.1    + alpha         -> v1.0.0-alpha.2   (misma etapa: N+1)
 //   v1.0.0-alpha.2    + beta          -> v1.0.0-beta.1    (cambia etapa: resetea a 1)
 //   v1.0.0-beta.2     + rc            -> v1.0.0-rc.1
@@ -93,10 +93,13 @@ function nextVersion(current, stage, releaseType) {
 
   // La versión actual es estable
   if (!v.stage) {
-    const base = bumpBase(v, releaseType);
-    if (stage === 'stable') return base;
-    // Arranca una etapa nueva sobre la base: alpha.1 / beta.1 / rc.1
-    return { ...base, stage, num: 1 };
+    if (stage === 'stable') {
+      // Release estable: cambia la base X.Y.Z según patch/minor/major
+      return bumpBase(v, releaseType);
+    }
+    // Arranca una etapa nueva sobre la MISMA base: v1.0.0 -> v1.0.0-alpha.1
+    // Las etapas alpha/beta/rc nunca tocan X.Y.Z, solo el número de etapa
+    return { ...v, stage, num: 1 };
   }
 
   // La versión actual ya es prerelease (v.X.Y.Z-etapa.N)
@@ -221,16 +224,19 @@ async function main() {
 
   const stage = await askStage();
 
-  // El tipo de cambio (patch/minor/major) solo se pregunta cuando la versión
-  // actual es estable. Si ya estás en una etapa (alpha/beta/rc), la siguiente
-  // versión se deduce solo: N+1, cambio de etapa, o publicar estable.
+  // El tipo de cambio (patch/minor/major) solo se pregunta al publicar ESTABLE
+  // desde una versión estable: es el único caso que cambia la base X.Y.Z.
+  // Alpha/beta/rc nunca tocan X.Y.Z, solo el número de etapa (N+1, reset o
+  // añadir la etapa nueva), así que no se pregunta nada.
   let releaseType = null;
-  if (!currentIsPrerelease) {
-    releaseType = await askReleaseType(originalVersion);
-  } else if (stage === 'stable') {
-    console.log(
-      `\nℹ️  Publicando ${originalVersion} → ${parseFullVersion(originalVersion).major}.${parseFullVersion(originalVersion).minor}.${parseFullVersion(originalVersion).patch} (sin etapa)`,
-    );
+  if (stage === 'stable') {
+    if (currentIsPrerelease) {
+      console.log(
+        `\nℹ️  Publicando ${originalVersion} → ${parseFullVersion(originalVersion).major}.${parseFullVersion(originalVersion).minor}.${parseFullVersion(originalVersion).patch} (sin etapa)`,
+      );
+    } else {
+      releaseType = await askReleaseType(originalVersion);
+    }
   }
 
   const userMessage = await askCommitMessage();
