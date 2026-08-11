@@ -15,6 +15,10 @@ yarn-error.log
 .env
 .env.local
 
+# Android keystore (secrets)
+android/keystore.jks
+android/keystore.properties
+
 # IDEs and editors
 .idea/
 .project
