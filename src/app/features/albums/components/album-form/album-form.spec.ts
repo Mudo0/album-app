@@ -37,9 +37,9 @@ describe('AlbumForm', () => {
         {
           provide: AlbumService,
           useValue: {
-            createNewAlbum: createSpy,
-            updateAlbumName: updateSpy,
-            getAlbumById: getByIdSpy,
+            create: createSpy,
+            updateName: updateSpy,
+            getById: getByIdSpy,
           },
         },
       ],

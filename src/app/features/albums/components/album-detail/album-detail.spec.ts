@@ -70,7 +70,7 @@ describe('AlbumDetail', () => {
       imports: [AlbumDetail],
       providers: [
         provideRouter([]),
-        { provide: AlbumService, useValue: { getAlbumById: getByIdSpy } },
+        { provide: AlbumService, useValue: { getById: getByIdSpy } },
         {
           provide: ImageService,
           useValue: {

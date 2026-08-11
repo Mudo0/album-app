@@ -30,7 +30,7 @@ describe('AlbumList', () => {
       imports: [AlbumList],
       providers: [
         provideRouter([]),
-        { provide: AlbumService, useValue: { getAllAlbums: getAllSpy } },
+        { provide: AlbumService, useValue: { getAll: getAllSpy } },
       ],
     }).compileComponents();
   }
