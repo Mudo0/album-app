@@ -23,6 +23,19 @@ def vStageCode = vStage == null ? 50 : (['alpha': 10, 'beta': 20, 'rc': 30][vSta
 def appVersionCode = vMajor * 1000000 + vMinor * 10000 + vPatch * 100 + vStageCode
 def appVersionName = pkgVersion
 
+// ── Firma del APK (release) ─────────────────────────────────────────────────
+// Carga condicional de android/keystore.properties (gitignoreado):
+//   - CI: lo escribe el workflow desde los secrets (KEYSTORE_*)
+//   - Local: lo creás vos apuntando a tu keystore.jks
+// Si no existe el archivo, release cae al debug signing para que los builds
+// locales sigan funcionando sin fricción (la firma debug no sirve para
+// distribuir, pero compila).
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.mudo.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -39,10 +52,22 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Firma real si hay keystore.properties; si no, debug (build local)
+            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
         }
     }
     // Renombra el APK con la versión (misma regla que el CI):
