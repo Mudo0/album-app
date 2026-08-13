@@ -136,11 +136,14 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         env:
           DISCORD_WEBHOOK_RELEASE: ${{ secrets.DISCORD_WEBHOOK_RELEASE }}
-          APK_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.apk.outputs.apk_name }}
+          APK_PATH: android/app/build/outputs/apk/release/${{ steps.apk.outputs.apk_name }}
+          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
         run: |
+          MSG="📢 <@&1536481832680431659> 🚀 **¡Nueva versión ${{ github.ref_name }} lista!**\n\n👀 *Mirá los últimos cambios y notas de esta versión acá:* [Ver Release en GitHub]($RELEASE_URL)\n\n📲 **Descarga rápida:** Podés bajar el APK adjunto directo acá abajo 👇"
+
           curl -sSf -X POST "$DISCORD_WEBHOOK_RELEASE" \
-            -H "Content-Type: application/json" \
-            -d "{\"content\":\"<@&1536481832680431659> 🚀 **Nuevo APK ${{ github.ref_name }} listo!** – [Descargar](${APK_URL})\", \"allowed_mentions\": {\"roles\": [\"1536481832680431659\"]}}"
+            -F "file1=@$APK_PATH" \
+            -F "payload_json={\"content\": \"$MSG\", \"allowed_mentions\": {\"roles\": [\"1536481832680431659\"]}}"
 
       # 14. Enviar APK por Telegram (documento adjunto + link directo).
       #     Misma URL determinística que en Discord (sin parsear outputs de terceros).
