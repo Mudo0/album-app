@@ -105,20 +105,14 @@ export class AlbumDetail implements OnInit, OnDestroy {
     if (!album) return;
 
     const images = await this.imageService.getByAlbum(album.id);
-    const stickers: StickerImage[] = [];
-    images.forEach((img, i) => {
-      // Espejo (sourceUri): usamos el thumbnail webp persistido; legacy (blob
-      // completo guardado antes del refactor): data
-      const blob = img.thumbnail ?? img.data;
-      if (!blob) return; // sin blob no se puede renderizar: se omite
-      const mime = img.thumbnailMime ?? img.mimeType;
-      stickers.push({
-        ...img,
-        x: img.position?.x ?? 20 + ((i * 55) % 240),
-        y: img.position?.y ?? 20 + ((i * 35) % 560),
-        objectUrl: URL.createObjectURL(new Blob([blob], { type: mime })),
-      });
-    });
+    const stickers: StickerImage[] = images.map((img, i) => ({
+      ...img,
+      x: img.position?.x ?? 20 + ((i * 55) % 240),
+      y: img.position?.y ?? 20 + ((i * 35) % 560),
+      objectUrl: URL.createObjectURL(
+        new Blob([img.thumbnail], { type: img.thumbnailMime }),
+      ),
+    }));
 
     // Revocar las viejas recién acá: durante el await los stickers visibles
     // siguen con sus URLs válidas

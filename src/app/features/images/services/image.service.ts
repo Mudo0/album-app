@@ -54,19 +54,15 @@ export class ImageService {
   }
 
   /**
-   * Resuelve la imagen full para el viewer. Si la URI murió (foto borrada de
-   * la galería), el GalleryService lanza GalleryError(mediaNotFound) — el
-   * componente decide si avisar para reubicar o eliminar la imagen.
+   * Resuelve la imagen full para el viewer a través del plugin (redimensionada
+   * y comprimida en Kotlin, la full nunca cruza el puente). Si la URI murió
+   * (foto borrada de la galería), el GalleryService lanza
+   * GalleryError(mediaNotFound) — el componente decide si avisar para
+   * reubicar o eliminar la imagen.
    */
   async resolveSource(image: Image): Promise<string> {
-    if (image.sourceUri) {
-      const full = await this.gallery.getMediaFull(image.sourceUri);
-      return `data:${full.mimeType};base64,${full.data}`;
-    }
-    if (image.data) {
-      return URL.createObjectURL(image.data);
-    }
-    throw new Error('La imagen no tiene un origen disponible.');
+    const full = await this.gallery.getMediaFull(image.sourceUri);
+    return `data:${full.mimeType};base64,${full.data}`;
   }
 
   async getLastByAlbum(albumId: string): Promise<Image | undefined> {
