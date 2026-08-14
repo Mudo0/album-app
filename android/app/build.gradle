@@ -1,5 +1,5 @@
 apply plugin: 'com.android.application'
-
+apply plugin: 'kotlin-android'
 // ── Versión desde package.json ─────────────────────────────────────────────
 // La fuente de verdad de la versión es package.json (la maneja scripts/release.js).
 // `npx cap sync` NO actualiza versionCode/versionName: verificado en el source
@@ -74,13 +74,18 @@ android {
     //   alpha/beta -> album-app-alpha.1.apk (el X.Y.Z es provisional, no va)
     //   rc/estable -> album-app-v1.0.0.apk   (la versión ya está fijada)
     // El versionName/versionCode se derivan de package.json al inicio de este archivo.
+    // SOLO release: `cap run android` (build debug) busca app-debug.apk hardcodeado
+    // en el CLI de Capacitor (@capacitor/cli/dist/common.js parseApkNameFromFlavor),
+    // así que el debug deja el nombre por defecto.
     applicationVariants.all { variant ->
-        variant.outputs.all { output ->
-            def vn = variant.versionName
-            if (vn ==~ /.*-(alpha|beta)\.\d+/) {
-                outputFileName = "album-app-${vn.substring(vn.lastIndexOf('-') + 1)}.apk"
-            } else {
-                outputFileName = "album-app-v${vn}.apk"
+        if (variant.buildType.name == 'release') {
+            variant.outputs.all { output ->
+                def vn = variant.versionName
+                if (vn ==~ /.*-(alpha|beta)\.\d+/) {
+                    outputFileName = "album-app-${vn.substring(vn.lastIndexOf('-') + 1)}.apk"
+                } else {
+                    outputFileName = "album-app-v${vn}.apk"
+                }
             }
         }
     }
@@ -93,6 +98,10 @@ repositories {
 }
 
 dependencies {
+
+    // Kotlin stdlib
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version" 
+
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
