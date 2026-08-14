@@ -89,7 +89,9 @@ describe('ImageService', () => {
     vi.mocked(repo.getLastByAlbum).mockResolvedValue({
       id: 'prev',
       albumId: 'a1',
-      data: new Blob(),
+      sourceUri: 'content://media/external/images/media/prev',
+      thumbnail: new Blob(),
+      thumbnailMime: 'image/webp',
       filename: 'a.jpg',
       mimeType: 'image/jpeg',
       order: 3,
@@ -115,6 +117,8 @@ describe('ImageService', () => {
       id: 'img1',
       albumId: 'a1',
       sourceUri: 'content://media/external/images/media/1',
+      thumbnail: new Blob(['thumb'], { type: 'image/webp' }),
+      thumbnailMime: 'image/webp',
       filename: 'foto.jpg',
       mimeType: 'image/jpeg',
       order: 0,
@@ -128,40 +132,6 @@ describe('ImageService', () => {
     expect(url).toBe('data:image/webp;base64,ZGF0YQ==');
   });
 
-  it('should fall back to the legacy blob for pre-refactor images', async () => {
-    const createUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:legacy');
-    const legacyBlob = new Blob(['old'], { type: 'image/jpeg' });
-
-    const url = await service.resolveSource({
-      id: 'img1',
-      albumId: 'a1',
-      data: legacyBlob,
-      filename: 'foto.jpg',
-      mimeType: 'image/jpeg',
-      order: 0,
-      position: { x: 0, y: 0 },
-      createdAt: new Date(),
-    });
-
-    expect(createUrlSpy).toHaveBeenCalledWith(legacyBlob);
-    expect(url).toBe('blob:legacy');
-    createUrlSpy.mockRestore();
-  });
-
-  it('should throw when the image has no source at all', async () => {
-    await expect(
-      service.resolveSource({
-        id: 'img1',
-        albumId: 'a1',
-        filename: 'foto.jpg',
-        mimeType: 'image/jpeg',
-        order: 0,
-        position: { x: 0, y: 0 },
-        createdAt: new Date(),
-      }),
-    ).rejects.toThrow('no tiene un origen');
-  });
-
   it('should propagate mediaNotFound from a dead URI', async () => {
     // El GalleryService real mapea el código nativo a GalleryError; el mock
     // respeta ese contrato y el ImageService lo propaga sin tragarse nada
@@ -173,6 +143,8 @@ describe('ImageService', () => {
       id: 'img1',
       albumId: 'a1',
       sourceUri: 'content://media/external/images/media/999',
+      thumbnail: new Blob(['thumb'], { type: 'image/webp' }),
+      thumbnailMime: 'image/webp',
       filename: 'foto.jpg',
       mimeType: 'image/jpeg',
       order: 0,

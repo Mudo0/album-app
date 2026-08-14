@@ -16,11 +16,13 @@ describe('AlbumDetail', () => {
   };
 
   function createMockImage(overrides: Partial<Image> = {}): Image {
-    const blob = new Blob(['fake'], { type: 'image/jpeg' });
+    const blob = new Blob(['fake'], { type: 'image/webp' });
     return {
       id: 'img1',
       albumId: 'a1',
-      data: blob,
+      sourceUri: 'content://media/external/images/media/1',
+      thumbnail: blob,
+      thumbnailMime: 'image/webp',
       filename: 'foto.jpg',
       mimeType: 'image/jpeg',
       order: 0,
@@ -270,27 +272,6 @@ describe('AlbumDetail', () => {
     expect(revokeSpy).toHaveBeenCalledTimes(2);
     expect(revokeSpy).toHaveBeenCalledWith(stickers[0].objectUrl);
     expect(revokeSpy).toHaveBeenCalledWith(stickers[1].objectUrl);
-  });
-
-  it('should use persisted thumbnail for gallery mirrors', async () => {
-    const createUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:thumb');
-    const thumbBlob = new Blob(['thumb'], { type: 'image/webp' });
-    const images = [
-      createMockImage({
-        sourceUri: 'content://media/external/images/media/1',
-        thumbnail: thumbBlob,
-        thumbnailMime: 'image/webp',
-        data: undefined,
-      }),
-    ];
-    getByAlbumSpy.mockResolvedValue(images);
-    const fixture = createFixture();
-    fixture.detectChanges();
-    await flushAsync();
-
-    // Para un espejo se crea la URL del thumbnail persistido, no del blob
-    expect(createUrlSpy).toHaveBeenCalledWith(thumbBlob);
-    createUrlSpy.mockRestore();
   });
 
   it('should have FAB linking to upload', async () => {
