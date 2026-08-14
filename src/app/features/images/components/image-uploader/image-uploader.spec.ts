@@ -1,21 +1,45 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { Capacitor } from '@capacitor/core';
+
 import { ImageUploader } from './image-uploader';
 import { NavigationService } from '../../../../core/services/navigation.service';
 import { ImageService } from '../../services/image.service';
+import { GalleryService } from '../../../../core/services/gallery.service';
+import type { GalleryMedia } from '../../../../core/interfaces/gallery-plugin.interface';
 
 describe('ImageUploader', () => {
-  let addSpy: ReturnType<typeof vi.fn>;
-  let mockFileInput: { click: ReturnType<typeof vi.fn> };
+  function createMedia(id: string): GalleryMedia {
+    return {
+      id,
+      uri: `content://media/external/images/media/${id}`,
+      name: `foto-${id}.jpg`,
+      mimeType: 'image/jpeg',
+      width: 4000,
+      height: 3000,
+      dateAdded: 1700000000,
+      thumbnail: 'aGVsbG8=', // base64 de "hello"
+    };
+  }
+
+  let getGallerySpy: ReturnType<typeof vi.fn>;
+  let checkPermissionsSpy: ReturnType<typeof vi.fn>;
+  let requestPermissionsSpy: ReturnType<typeof vi.fn>;
+  let addFromGallerySpy: ReturnType<typeof vi.fn>;
   let navigationBackSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
-    addSpy = vi.fn().mockResolvedValue({ id: 'new-img' });
-    mockFileInput = { click: vi.fn() };
+    getGallerySpy = vi.fn().mockResolvedValue({ medias: [], hasMore: false });
+    checkPermissionsSpy = vi
+      .fn()
+      .mockResolvedValue({ mediaLibrary: 'granted', storageLegacy: 'granted' });
+    requestPermissionsSpy = vi
+      .fn()
+      .mockResolvedValue({ mediaLibrary: 'granted', storageLegacy: 'granted' });
+    addFromGallerySpy = vi.fn().mockResolvedValue({ id: 'new-img' });
     navigationBackSpy = vi.fn();
 
-    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:mock-${Math.random()}`);
-    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
 
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
@@ -23,7 +47,15 @@ describe('ImageUploader', () => {
       providers: [
         provideRouter([]),
         { provide: NavigationService, useValue: { back: navigationBackSpy } },
-        { provide: ImageService, useValue: { add: addSpy } },
+        { provide: ImageService, useValue: { addFromGallery: addFromGallerySpy } },
+        {
+          provide: GalleryService,
+          useValue: {
+            getGallery: getGallerySpy,
+            checkPermissions: checkPermissionsSpy,
+            requestPermissions: requestPermissionsSpy,
+          },
+        },
       ],
     }).compileComponents();
   });
@@ -35,161 +67,192 @@ describe('ImageUploader', () => {
   function createFixture() {
     const fixture = TestBed.createComponent(ImageUploader);
     fixture.componentRef.setInput('id', 'album-1');
-
-    const component = fixture.componentInstance;
-    (
-      component as unknown as { fileInputRef: () => { nativeElement: typeof mockFileInput } }
-    ).fileInputRef = vi.fn(() => ({ nativeElement: mockFileInput })) as never;
-
     return fixture;
   }
 
-  function createMockFileList(files: File[]): FileList {
-    return {
-      length: files.length,
-      item: (i: number) => files[i] ?? null,
-      [Symbol.iterator]: () => files[Symbol.iterator](),
-    } as unknown as FileList;
+  async function flush(cycles = 2): Promise<void> {
+    for (let i = 0; i < cycles; i++) {
+      await new Promise((r) => setTimeout(r, 0));
+    }
   }
 
-  it('should render the form', async () => {
+  it('should render the title', async () => {
     const fixture = createFixture();
     fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
 
-    const el: HTMLElement = fixture.nativeElement;
-    expect(el.textContent).toContain('Agregar imágenes');
-    expect(el.textContent).toContain('Seleccionar imágenes');
+    expect(fixture.nativeElement.textContent).toContain('Agregar imágenes');
   });
 
-  it('should open file picker on button click', () => {
+  it('should request gallery access and load the first page on init', async () => {
+    getGallerySpy.mockResolvedValue({
+      medias: [createMedia('1'), createMedia('2')],
+      hasMore: false,
+    });
     const fixture = createFixture();
     fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
 
-    const component = fixture.componentInstance;
-    component.openPicker();
+    expect(checkPermissionsSpy).toHaveBeenCalled();
+    expect(getGallerySpy).toHaveBeenCalledWith(100, 0);
 
-    expect(mockFileInput.click).toHaveBeenCalled();
+    const component = fixture.componentInstance as ImageUploader;
+    expect(component.medias().length).toBe(2);
+    expect(component.permission()).toBe('granted');
+    expect(fixture.nativeElement.querySelectorAll('.media-item').length).toBe(2);
   });
 
-  it('should create previews when files are selected', () => {
+  it('should show the native-only notice on web', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
     const fixture = createFixture();
     fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
 
-    const component = fixture.componentInstance;
-    const file = new File(['a'], 'foto.jpg', { type: 'image/jpeg' });
-    const fileList = createMockFileList([file]);
-
-    const event = { target: { files: fileList, value: '' } } as unknown as Event;
-    component.onFilesSelected(event);
-
-    expect(URL.createObjectURL).toHaveBeenCalledWith(file);
-    expect(component.files().length).toBe(1);
-    expect(component.files()[0].url).toContain('blob:mock-');
+    expect(fixture.nativeElement.textContent).toContain('solo en la app Android');
+    expect(checkPermissionsSpy).not.toHaveBeenCalled();
   });
 
-  it('should append files to existing selection', () => {
+  it('should show the denied state and allow requesting access again', async () => {
+    checkPermissionsSpy.mockResolvedValue({
+      mediaLibrary: 'denied',
+      storageLegacy: 'denied',
+    });
+    requestPermissionsSpy.mockResolvedValueOnce({
+      mediaLibrary: 'denied',
+      storageLegacy: 'denied',
+    });
     const fixture = createFixture();
     fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
 
-    const component = fixture.componentInstance;
-    const f1 = new File(['a'], 'a.jpg', { type: 'image/jpeg' });
-    const f2 = new File(['b'], 'b.jpg', { type: 'image/jpeg' });
+    const component = fixture.componentInstance as ImageUploader;
+    expect(component.permission()).toBe('denied');
+    expect(fixture.nativeElement.textContent).toContain('Dar permisos');
 
-    component.onFilesSelected({
-      target: { files: createMockFileList([f1]), value: '' },
+    await component.requestAccess();
+    fixture.detectChanges();
+
+    expect(requestPermissionsSpy).toHaveBeenCalledTimes(2);
+    expect(component.permission()).toBe('granted');
+    expect(getGallerySpy).toHaveBeenCalled();
+  });
+
+  it('should select and deselect media items', async () => {
+    getGallerySpy.mockResolvedValue({
+      medias: [createMedia('1'), createMedia('2')],
+      hasMore: false,
+    });
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    const [m1, m2] = component.medias();
+
+    component.toggle(m1);
+    component.toggle(m2);
+    expect(component.selected().size).toBe(2);
+
+    component.toggle(m1);
+    expect(component.selected().size).toBe(1);
+    expect(component.isSelected(m2.id)).toBe(true);
+    expect(component.isSelected(m1.id)).toBe(false);
+  });
+
+  it('should load the next page when scrolling near the bottom', async () => {
+    getGallerySpy
+      .mockResolvedValueOnce({ medias: [createMedia('1')], hasMore: true })
+      .mockResolvedValueOnce({ medias: [createMedia('2')], hasMore: false });
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    component.onScroll({
+      target: { scrollTop: 900, clientHeight: 400, scrollHeight: 1500 },
     } as unknown as Event);
-
-    component.onFilesSelected({
-      target: { files: createMockFileList([f2]), value: '' },
-    } as unknown as Event);
-
-    expect(component.files().length).toBe(2);
-  });
-
-  it('should remove file and revoke URL', () => {
-    const fixture = createFixture();
+    await flush();
     fixture.detectChanges();
 
-    const component = fixture.componentInstance;
-    const file = new File(['x'], 'x.jpg', { type: 'image/jpeg' });
-
-    component.onFilesSelected({
-      target: { files: createMockFileList([file]), value: '' },
-    } as unknown as Event);
-
-    const url = component.files()[0].url;
-    component.removeFile(0);
-
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith(url);
-    expect(component.files().length).toBe(0);
+    expect(getGallerySpy).toHaveBeenLastCalledWith(100, 1);
+    expect(component.medias().length).toBe(2);
   });
 
-  it('should save all files and go back', async () => {
+  it('should save selected medias sequentially and go back', async () => {
+    getGallerySpy.mockResolvedValue({
+      medias: [createMedia('1'), createMedia('2')],
+      hasMore: false,
+    });
     const fixture = createFixture();
     fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
 
-    const component = fixture.componentInstance;
-    const f1 = new File(['a'], 'a.jpg', { type: 'image/jpeg' });
-    const f2 = new File(['b'], 'b.jpg', { type: 'image/jpeg' });
+    const component = fixture.componentInstance as ImageUploader;
+    const [m1, m2] = component.medias();
+    component.toggle(m1);
+    component.toggle(m2);
 
-    component.onFilesSelected({
-      target: { files: createMockFileList([f1, f2]), value: '' },
-    } as unknown as Event);
+    await component.save();
+    fixture.detectChanges();
+
+    expect(addFromGallerySpy).toHaveBeenCalledTimes(2);
+    expect(addFromGallerySpy).toHaveBeenNthCalledWith(1, 'album-1', m1);
+    expect(addFromGallerySpy).toHaveBeenNthCalledWith(2, 'album-1', m2);
+    expect(navigationBackSpy).toHaveBeenCalled();
+    expect(component.saving()).toBe(false);
+  });
+
+  it('should not save when nothing is selected', async () => {
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flush();
+
+    const component = fixture.componentInstance as ImageUploader;
+    await component.save();
+
+    expect(addFromGallerySpy).not.toHaveBeenCalled();
+    expect(navigationBackSpy).not.toHaveBeenCalled();
+  });
+
+  it('should keep saving the rest of the batch when one photo fails', async () => {
+    getGallerySpy.mockResolvedValue({
+      medias: [createMedia('1'), createMedia('2')],
+      hasMore: false,
+    });
+    addFromGallerySpy
+      .mockRejectedValueOnce(new Error('foto caída'))
+      .mockResolvedValueOnce({ id: 'ok' });
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    const [m1, m2] = component.medias();
+    component.toggle(m1);
+    component.toggle(m2);
 
     await component.save();
 
-    expect(addSpy).toHaveBeenCalledTimes(2);
-    expect(addSpy).toHaveBeenCalledWith('album-1', f1);
-    expect(addSpy).toHaveBeenCalledWith('album-1', f2);
+    expect(addFromGallerySpy).toHaveBeenCalledTimes(2);
+    expect(component.error()).toContain('foto-1.jpg');
     expect(navigationBackSpy).toHaveBeenCalled();
   });
 
-  it('should not save when already saving', async () => {
+  it('should show an error when the gallery call fails', async () => {
+    getGallerySpy.mockRejectedValue(new Error('no hay galería'));
     const fixture = createFixture();
     fixture.detectChanges();
-
-    const component = fixture.componentInstance;
-    component.saving.set(true);
-    component.files.set([
-      { file: new File(['a'], 'a.jpg', { type: 'image/jpeg' }), url: 'blob:x' },
-    ]);
-
-    await component.save();
-
-    expect(addSpy).not.toHaveBeenCalled();
-  });
-
-  it('should revoke all URLs on destroy', () => {
-    const fixture = createFixture();
+    await flush();
     fixture.detectChanges();
 
-    const component = fixture.componentInstance;
-    const file = new File(['x'], 'x.jpg', { type: 'image/jpeg' });
-
-    component.onFilesSelected({
-      target: { files: createMockFileList([file]), value: '' },
-    } as unknown as Event);
-
-    const url = component.files()[0].url;
-    component.ngOnDestroy();
-
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith(url);
-  });
-
-  it('should show preview grid when files are selected', () => {
-    const fixture = createFixture();
-    fixture.detectChanges();
-
-    const component = fixture.componentInstance;
-    const file = new File(['a'], 'foto.jpg', { type: 'image/jpeg' });
-    component.onFilesSelected({
-      target: { files: createMockFileList([file]), value: '' },
-    } as unknown as Event);
-    fixture.detectChanges();
-
-    const el: HTMLElement = fixture.nativeElement;
-    expect(el.querySelector('.preview-item')).toBeTruthy();
-    expect(el.querySelector('.preview-img')).toBeTruthy();
-    expect(el.textContent).toContain('Guardar 1 imagen');
+    expect(fixture.nativeElement.textContent).toContain('no hay galería');
   });
 });

@@ -272,6 +272,27 @@ describe('AlbumDetail', () => {
     expect(revokeSpy).toHaveBeenCalledWith(stickers[1].objectUrl);
   });
 
+  it('should use persisted thumbnail for gallery mirrors', async () => {
+    const createUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:thumb');
+    const thumbBlob = new Blob(['thumb'], { type: 'image/webp' });
+    const images = [
+      createMockImage({
+        sourceUri: 'content://media/external/images/media/1',
+        thumbnail: thumbBlob,
+        thumbnailMime: 'image/webp',
+        data: undefined,
+      }),
+    ];
+    getByAlbumSpy.mockResolvedValue(images);
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flushAsync();
+
+    // Para un espejo se crea la URL del thumbnail persistido, no del blob
+    expect(createUrlSpy).toHaveBeenCalledWith(thumbBlob);
+    createUrlSpy.mockRestore();
+  });
+
   it('should have FAB linking to upload', async () => {
     const fixture = createFixture();
     fixture.detectChanges();
