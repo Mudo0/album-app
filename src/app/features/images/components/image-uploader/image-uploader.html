@@ -4,56 +4,79 @@
   <div class="spacer"></div>
 </header>
 
-<main class="main">
-  <input
-    #fileInput
-    type="file"
-    accept="image/*"
-    multiple
-    hidden
-    (change)="onFilesSelected($event)"
-  />
-
-  @if (files().length === 0) {
-    <div class="empty">
-      <div class="empty-icon">📸</div>
-      <p class="empty-title">Seleccioná tus fotos</p>
-      <p class="empty-text">
-        Podés elegir varias imágenes de tu galería o sacar una foto con la cámara
-      </p>
+<main class="main" (scroll)="onScroll($event)">
+  @if (!isNative) {
+    <div class="notice">
+      📱 La galería está disponible solo en la app Android. Probá este flujo
+      en el dispositivo con Capacitor.
     </div>
   }
 
-  @if (files().length > 0) {
-    <div class="preview-grid">
-      @for (preview of files(); track preview.url; let i = $index) {
-        <div class="preview-item">
-          <img
-            class="preview-img"
-            [src]="preview.url"
-            [alt]="'Vista previa ' + (i + 1)"
-          />
-          <button
-            class="preview-remove"
-            (click)="removeFile(i)"
-            aria-label="Quitar imagen"
-          >
-            ✕
-          </button>
-        </div>
+  @if (error(); as msg) {
+    <div class="error">{{ msg }}</div>
+  }
+
+  @if (isNative && permission() === 'denied') {
+    <div class="empty">
+      <div class="empty-icon">🔒</div>
+      <p class="empty-title">Necesitamos acceso a tu galería</p>
+      <p class="empty-text">Aceptá el permiso para elegir tus fotos</p>
+      <button class="perm-btn" (click)="requestAccess()">Dar permisos</button>
+    </div>
+  }
+
+  @if (isNative && permission() === 'granted') {
+    @if (medias().length === 0 && !loading()) {
+      <div class="empty">
+        <div class="empty-icon">📸</div>
+        <p class="empty-title">No encontramos fotos</p>
+        <p class="empty-text">¿Tenés imágenes guardadas en este dispositivo?</p>
+      </div>
+    }
+
+    <div class="grid">
+      @for (media of medias(); track media.id) {
+        <button
+          class="media-item"
+          [class.selected]="isSelected(media.id)"
+          (click)="toggle(media)"
+          [disabled]="saving()"
+        >
+          <img class="media-img" [src]="thumbSrc(media)" [alt]="media.name" />
+          @if (isSelected(media.id)) {
+            <span class="check">✓</span>
+          }
+        </button>
       }
     </div>
+
+    @if (loading()) {
+      <p class="loading">Cargando...</p>
+    }
   }
 </main>
 
 <footer class="footer">
-  <button class="pick-btn" (click)="openPicker()" [disabled]="saving()">
-    {{ files().length > 0 ? 'Agregar más' : 'Seleccionar imágenes' }}
-  </button>
+  @if (isNative && permission() === 'granted') {
+    @if (saving()) {
+      <p class="progress">
+        Guardando {{ savingProgress().done }} de {{ savingProgress().total }}...
+      </p>
+    }
 
-  @if (files().length > 0) {
-    <button class="save-btn" (click)="save()" [disabled]="saving()">
-      {{ saving() ? 'Guardando...' : 'Guardar ' + files().length + ' imagen' + (files().length > 1 ? 'es' : '') }}
+    <button
+      class="save-btn"
+      (click)="save()"
+      [disabled]="selected().size === 0 || saving()"
+    >
+      {{
+        saving()
+          ? 'Guardando...'
+          : 'Guardar ' +
+            selected().size +
+            ' imagen' +
+            (selected().size > 1 ? 'es' : '')
+      }}
     </button>
   }
 </footer>
