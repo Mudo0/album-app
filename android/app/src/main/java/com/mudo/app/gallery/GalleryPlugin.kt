@@ -88,7 +88,7 @@ class GalleryPlugin : Plugin() {
     }
 
     @PluginMethod
-    fun checkPermissions(call: PluginCall) {
+    override fun checkPermissions(call: PluginCall) {
         val result = JSObject().apply {
             put("mediaLibrary", getPermissionState("mediaLibrary").toString())
             put("storageLegacy", getPermissionState("storageLegacy").toString())
@@ -97,7 +97,7 @@ class GalleryPlugin : Plugin() {
     }
 
     @PluginMethod
-    fun requestPermissions(call: PluginCall) {
+    override fun requestPermissions(call: PluginCall) {
         if (!mediaPermissionGranted()) {
             requestAllPermissions(call, "permissionsCallback")
         } else {
@@ -116,8 +116,9 @@ class GalleryPlugin : Plugin() {
     fun getGallery(call: PluginCall) {
         if (!requirePermission(call)) return
 
-        val limit = call.getInt("limit", DEFAULT_PAGE_SIZE).coerceIn(1, 200)
-        val offset = call.getInt("offset", 0).coerceAtLeast(0)
+        val limit = (call.getInt("limit", DEFAULT_PAGE_SIZE) ?: DEFAULT_PAGE_SIZE)
+            .coerceIn(1, 200)
+        val offset = (call.getInt("offset", 0) ?: 0).coerceAtLeast(0)
 
         executor.execute {
             try {
@@ -128,16 +129,19 @@ class GalleryPlugin : Plugin() {
                 val medias = JSArray()
                 var count = 0
 
-                // Paginación: la vía oficial (API 26+) es el Bundle con
-                // QUERY_ARG_LIMIT/QUERY_ARG_OFFSET. Inyectar LIMIT en el
-                // sortOrder es un truco no garantizado (depende del MediaProvider);
-                // solo se usa en API 24-25, donde la overload con extras no existe.
+                // Paginación: la vía oficial (API 26+) es la QueryArgs API —
+                // ContentResolver.query(Uri, String[], Bundle, CancellationSignal),
+                // con LIMIT/OFFSET/SORT dentro del Bundle. Inyectar LIMIT en el
+                // sortOrder de la query clásica es un truco no garantizado
+                // (depende del MediaProvider); solo se usa en API 24-25, donde
+                // la overload con Bundle no existe.
                 val cursor = if (Build.VERSION.SDK_INT >= API_LEVEL_26) {
-                    val extras = Bundle().apply {
+                    val queryArgs = Bundle().apply {
+                        putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER, sortOrder)
                         putInt(ContentResolver.QUERY_ARG_LIMIT, limit)
                         putInt(ContentResolver.QUERY_ARG_OFFSET, offset)
                     }
-                    resolver.query(collection, null, null, null, sortOrder, extras)
+                    resolver.query(collection, null, queryArgs, null)
                 } else {
                     resolver.query(
                         collection,
@@ -145,6 +149,7 @@ class GalleryPlugin : Plugin() {
                         null,
                         null,
                         "$sortOrder LIMIT $limit OFFSET $offset",
+                        null,
                     )
                 }
 
@@ -205,9 +210,9 @@ class GalleryPlugin : Plugin() {
             call.reject("uri requerida", EC_INVALID_ARGUMENT)
             return
         }
-        val maxSize = call.getInt("size", 512).coerceIn(16, 4096)
+        val maxSize = (call.getInt("size", 512) ?: 512).coerceIn(16, 4096)
         val format = call.getString("format") ?: "webp"
-        val quality = call.getInt("quality", 80).coerceIn(1, 100)
+        val quality = (call.getInt("quality", 80) ?: 80).coerceIn(1, 100)
 
         executor.execute {
             val parsed = Uri.parse(uri)
@@ -231,9 +236,9 @@ class GalleryPlugin : Plugin() {
             call.reject("uri requerida", EC_INVALID_ARGUMENT)
             return
         }
-        val maxSize = call.getInt("maxSize", 2048).coerceIn(16, 8192)
+        val maxSize = (call.getInt("maxSize", 2048) ?: 2048).coerceIn(16, 8192)
         val format = call.getString("format") ?: "webp"
-        val quality = call.getInt("quality", 82).coerceIn(1, 100)
+        val quality = (call.getInt("quality", 82) ?: 82).coerceIn(1, 100)
 
         executor.execute {
             try {
