@@ -1,7 +1,7 @@
 # ESCALA
 [ ] - Backend para usuarios, suscripcion, pagos,etc.
-[ ] - migrar indexdb a backend -> postgres.
-[ ] - Guardado en la nube
+[ ] - migrar indexdb a backend -> postgres. ???
+[ ] - Guardado en la nube ???
 
 - 1. subir imagen
 - 2. convertir a webp
@@ -34,12 +34,12 @@
 
 ## Optimizacion
 
-- [ ] adaptar a offline
+- [x] adaptar a offline
 - [ ] agregar cache
 - [ ] agregar preview webp de sticker // para verla mas de cerca
-- [ ] agregar thumbnail webp de sticker // para el album
-- [ ] cargado de stickers parejos (todos al mismo tiempo)
-- [ ] al agregar muchas imagenes se empieza a laguear (posible problema de memoria)
+- [x] agregar thumbnail webp de sticker // para el album
+- [x] cargado de stickers parejos (todos al mismo tiempo)
+- [x] al agregar muchas imagenes se empieza a laguear (posible problema de memoria)
 
 # bugs para corregir
 
@@ -49,5 +49,5 @@
 - [ ] al cambiar de resolucion algunos stickers se pueden quedar fuera del limite de la pantalla pero existiendo dentro del album.
 # Testing
 
-- [ ] agregar tests para prevenir errores de navegacion
+- [x] agregar tests para prevenir errores de navegacion
 - [ ] agregar tests e2e que simulen el flujo de creacion/edicion de albumes y stickers.
