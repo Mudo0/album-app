@@ -24,6 +24,7 @@ import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
 import java.io.ByteArrayOutputStream
 import java.io.FileNotFoundException
+import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 
 /**
@@ -65,11 +66,20 @@ class GalleryPlugin : Plugin() {
         private const val GRID_THUMB_SIZE = 256
         private const val GRID_THUMB_QUALITY = 70
         private const val KIND_MINI = 1 // MediaStore.Images.Thumbnails.MINI_KIND
+        /** Hilos del pool dedicado a los thumbs del grid (fijo: pico de RAM acotado). */
+        private const val THUMB_THREADS = 4
     }
 
-    // Un solo hilo: las páginas de galería y el guardado se procesan en serie
-    // (requisito de memoria del proyecto) y la UI nunca se congela.
+    // Ejecutor SERIAL: páginas de galería, thumbs de guardado y la full se
+    // procesan uno a la vez (requisito de memoria del proyecto); la UI nunca
+    // se congela.
     private val executor = Executors.newSingleThreadExecutor()
+
+    // Pool FIJO solo para los thumbs del GRID: los 100 de una página se generan
+    // en paralelo (~4x más rápido que en serie). Los bitmaps son de 256px y se
+    // reciclan al instante, así el pico de memoria queda acotado a THUMB_THREADS
+    // decodificaciones simultáneas — nunca 100.
+    private val thumbExecutor = Executors.newFixedThreadPool(THUMB_THREADS)
 
     // ── Permisos ────────────────────────────────────────────────────────────
 
@@ -127,6 +137,7 @@ class GalleryPlugin : Plugin() {
                 val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
 
                 val medias = JSArray()
+                val rows = mutableListOf<GalleryRow>()
                 var count = 0
 
                 // Paginación: la vía oficial (API 26+) es la QueryArgs API —
@@ -167,23 +178,37 @@ class GalleryPlugin : Plugin() {
                         val width = if (widthIdx >= 0) it.getInt(widthIdx) else 0
                         val height = if (heightIdx >= 0) it.getInt(heightIdx) else 0
 
-                        val uri = ContentUris.withAppendedId(collection, id)
-                        // Thumbnail del SISTEMA (cache del MediaProvider), no de la full
-                        val thumb = loadThumb(uri, id, GRID_THUMB_SIZE, "jpeg", GRID_THUMB_QUALITY)
-
-                        val item = JSObject().apply {
-                            put("id", id.toString())
-                            put("uri", uri.toString())
-                            put("name", name)
-                            put("mimeType", mimeType)
-                            put("width", width)
-                            put("height", height)
-                            put("dateAdded", dateAdded)
-                            put("thumbnail", thumb?.data.orEmpty())
-                        }
-                        medias.put(item)
+                        rows.add(
+                            GalleryRow(
+                                id = id,
+                                uri = ContentUris.withAppendedId(collection, id),
+                                name = name,
+                                mimeType = mimeType,
+                                width = width,
+                                height = height,
+                                dateAdded = dateAdded,
+                            ),
+                        )
                         count++
                     }
+                }
+
+                // Cursor ya liberado. Thumbs del SISTEMA (cache del MediaProvider)
+                // generados EN PARALELO con el pool fijo; el orden se preserva.
+                val thumbs = buildGridThumbs(rows, GRID_THUMB_SIZE, "jpeg", GRID_THUMB_QUALITY)
+
+                rows.forEachIndexed { index, row ->
+                    val item = JSObject().apply {
+                        put("id", row.id.toString())
+                        put("uri", row.uri.toString())
+                        put("name", row.name)
+                        put("mimeType", row.mimeType)
+                        put("width", row.width)
+                        put("height", row.height)
+                        put("dateAdded", row.dateAdded)
+                        put("thumbnail", thumbs[index]?.data.orEmpty())
+                    }
+                    medias.put(item)
                 }
 
                 val response = JSObject().apply {
@@ -248,6 +273,55 @@ class GalleryPlugin : Plugin() {
                 call.reject("Se necesita permiso para leer la galería.", EC_ACCESS_DENIED)
             } catch (e: Exception) {
                 call.reject("Error al procesar la imagen: ${e.message}")
+            }
+        }
+    }
+
+    // ── Thumbnails del grid (en paralelo) ───────────────────────────────────
+
+    /** Una fila de la galería, con todo lo que el JS necesita para el grid. */
+    private data class GalleryRow(
+        val id: Long,
+        val uri: Uri,
+        val name: String,
+        val mimeType: String,
+        val width: Int,
+        val height: Int,
+        val dateAdded: Long,
+    )
+
+    /**
+     * Genera los thumbs del grid EN PARALELO con el pool fijo (THUMB_THREADS).
+     *
+     * `invokeAll` ejecuta todas las tareas y devuelve los futures EN EL MISMO
+     * ORDEN de entrada, así el grid queda estable aunque un thumb tarde más que
+     * otro. Un thumb caído NUNCA rompe la página: devuelve null y el JS muestra
+     * un placeholder (el permiso ya se validó arriba, un fallo acá es un item
+     * puntual: URI muerta, thumb sin indexar, etc.).
+     */
+    private fun buildGridThumbs(
+        rows: List<GalleryRow>,
+        size: Int,
+        format: String,
+        quality: Int,
+    ): List<CompressedImage?> {
+        if (rows.isEmpty()) return emptyList()
+
+        val tasks = rows.map { row ->
+            Callable {
+                try {
+                    loadThumb(row.uri, row.id, size, format, quality)
+                } catch (e: Exception) {
+                    null // un thumb caído no debe romper la página del grid
+                }
+            }
+        }
+        val futures = thumbExecutor.invokeAll(tasks)
+        return futures.map { future ->
+            try {
+                future.get()
+            } catch (e: Exception) {
+                null
             }
         }
     }
