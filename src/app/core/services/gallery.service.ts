@@ -50,6 +50,23 @@ export class GalleryService {
     }
   }
 
+  /**
+   * Batch: una sola llamada nativa para N fotos. `thumbs[i]` corresponde a
+   * `uris[i]`; una uri fallida llega como null (la reporta el llamador por
+   * nombre, sin abortar el resto del lote).
+   */
+  async getMediaThumbnails(
+    uris: string[],
+    options: { size: number; format: 'webp' | 'jpeg'; quality?: number },
+  ): Promise<Array<MediaResult | null>> {
+    try {
+      const { thumbs } = await this.plugin.getMediaThumbnails({ uris, ...options });
+      return thumbs;
+    } catch (error) {
+      throw this.mapError(error);
+    }
+  }
+
   async getMediaFull(
     uri: string,
     options?: { maxSize?: number; format?: 'webp' | 'jpeg'; quality?: number },
