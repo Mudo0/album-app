@@ -7,6 +7,7 @@ describe('GalleryService', () => {
   const plugin = {
     getGallery: vi.fn(),
     getMediaThumbnail: vi.fn(),
+    getMediaThumbnails: vi.fn(),
     getMediaFull: vi.fn(),
     checkPermissions: vi.fn(),
     requestPermissions: vi.fn(),
@@ -43,6 +44,24 @@ describe('GalleryService', () => {
     ).resolves.toBe(result);
     expect(plugin.getMediaThumbnail).toHaveBeenCalledWith({
       uri: 'content://x',
+      size: 512,
+      format: 'webp',
+    });
+  });
+
+  it('should delegate getMediaThumbnails preserving per-uri order', async () => {
+    const result = {
+      thumbs: [{ data: 'abc', mimeType: 'image/webp', width: 512, height: 384 }, null],
+    };
+    vi.mocked(plugin.getMediaThumbnails).mockResolvedValue(result as never);
+
+    const thumbs = await service.getMediaThumbnails(
+      ['content://a', 'content://b'],
+      { size: 512, format: 'webp' },
+    );
+    expect(thumbs).toEqual(result.thumbs);
+    expect(plugin.getMediaThumbnails).toHaveBeenCalledWith({
+      uris: ['content://a', 'content://b'],
       size: 512,
       format: 'webp',
     });

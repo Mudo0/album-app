@@ -25,7 +25,7 @@ describe('ImageUploader', () => {
   let getGallerySpy: ReturnType<typeof vi.fn>;
   let checkPermissionsSpy: ReturnType<typeof vi.fn>;
   let requestPermissionsSpy: ReturnType<typeof vi.fn>;
-  let addFromGallerySpy: ReturnType<typeof vi.fn>;
+  let addManyFromGallerySpy: ReturnType<typeof vi.fn>;
   let navigationBackSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
@@ -36,7 +36,7 @@ describe('ImageUploader', () => {
     requestPermissionsSpy = vi
       .fn()
       .mockResolvedValue({ mediaLibrary: 'granted', storageLegacy: 'granted' });
-    addFromGallerySpy = vi.fn().mockResolvedValue({ id: 'new-img' });
+    addManyFromGallerySpy = vi.fn().mockResolvedValue(undefined);
     navigationBackSpy = vi.fn();
 
     vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
@@ -47,7 +47,7 @@ describe('ImageUploader', () => {
       providers: [
         provideRouter([]),
         { provide: NavigationService, useValue: { back: navigationBackSpy } },
-        { provide: ImageService, useValue: { addFromGallery: addFromGallerySpy } },
+        { provide: ImageService, useValue: { addManyFromGallery: addManyFromGallerySpy } },
         {
           provide: GalleryService,
           useValue: {
@@ -184,7 +184,7 @@ describe('ImageUploader', () => {
     expect(component.medias().length).toBe(2);
   });
 
-  it('should save selected medias sequentially and go back', async () => {
+  it('should save selected medias in a single batch and go back', async () => {
     getGallerySpy.mockResolvedValue({
       medias: [createMedia('1'), createMedia('2')],
       hasMore: false,
@@ -202,9 +202,8 @@ describe('ImageUploader', () => {
     await component.save();
     fixture.detectChanges();
 
-    expect(addFromGallerySpy).toHaveBeenCalledTimes(2);
-    expect(addFromGallerySpy).toHaveBeenNthCalledWith(1, 'album-1', m1);
-    expect(addFromGallerySpy).toHaveBeenNthCalledWith(2, 'album-1', m2);
+    expect(addManyFromGallerySpy).toHaveBeenCalledTimes(1);
+    expect(addManyFromGallerySpy).toHaveBeenCalledWith('album-1', [m1, m2]);
     expect(navigationBackSpy).toHaveBeenCalled();
     expect(component.saving()).toBe(false);
   });
@@ -217,32 +216,35 @@ describe('ImageUploader', () => {
     const component = fixture.componentInstance as ImageUploader;
     await component.save();
 
-    expect(addFromGallerySpy).not.toHaveBeenCalled();
+    expect(addManyFromGallerySpy).not.toHaveBeenCalled();
     expect(navigationBackSpy).not.toHaveBeenCalled();
   });
 
-  it('should keep saving the rest of the batch when one photo fails', async () => {
-    getGallerySpy.mockResolvedValue({
-      medias: [createMedia('1'), createMedia('2')],
-      hasMore: false,
-    });
-    addFromGallerySpy
-      .mockRejectedValueOnce(new Error('foto caída'))
-      .mockResolvedValueOnce({ id: 'ok' });
+  it('should keep saving the next batch when one batch fails', async () => {
+    // 26 fotos = 2 lotes (BATCH_SIZE = 25): el primero falla, el segundo pasa
+    const medias = Array.from({ length: 26 }, (_, i) => createMedia(String(i)));
+    getGallerySpy.mockResolvedValue({ medias, hasMore: false });
+    addManyFromGallerySpy
+      .mockRejectedValueOnce(new Error('No se pudieron guardar 1 foto(s): foto-25.jpg'))
+      .mockResolvedValueOnce(undefined);
     const fixture = createFixture();
     fixture.detectChanges();
     await flush();
     fixture.detectChanges();
 
     const component = fixture.componentInstance as ImageUploader;
-    const [m1, m2] = component.medias();
-    component.toggle(m1);
-    component.toggle(m2);
+    component.medias().forEach((m) => component.toggle(m));
 
     await component.save();
 
-    expect(addFromGallerySpy).toHaveBeenCalledTimes(2);
-    expect(component.error()).toContain('foto-1.jpg');
+    expect(addManyFromGallerySpy).toHaveBeenCalledTimes(2);
+    expect(addManyFromGallerySpy).toHaveBeenNthCalledWith(
+      1,
+      'album-1',
+      component.medias().slice(0, 25),
+    );
+    expect(addManyFromGallerySpy).toHaveBeenNthCalledWith(2, 'album-1', medias.slice(25));
+    expect(component.error()).toContain('foto-25.jpg');
     expect(navigationBackSpy).toHaveBeenCalled();
   });
 

@@ -18,6 +18,7 @@ describe('ImageService', () => {
   const gallery = {
     getGallery: vi.fn(),
     getMediaThumbnail: vi.fn(),
+    getMediaThumbnails: vi.fn(),
     getMediaFull: vi.fn(),
     checkPermissions: vi.fn(),
     requestPermissions: vi.fn(),
@@ -103,6 +104,62 @@ describe('ImageService', () => {
 
     const persisted = vi.mocked(repo.add).mock.calls[0][0];
     expect(persisted.order).toBe(4);
+  });
+
+  it('should batch persist N medias with ONE native call and sequential adds', async () => {
+    vi.mocked(gallery.getMediaThumbnails).mockResolvedValue([
+      { data: 'aGVsbG8=', mimeType: 'image/webp', width: 512, height: 384 }, // "hello"
+      { data: 'd29ybGQ=', mimeType: 'image/webp', width: 512, height: 384 }, // "world"
+    ]);
+    vi.mocked(repo.getLastByAlbum).mockResolvedValue(undefined);
+    vi.mocked(repo.add).mockResolvedValue(undefined as never);
+
+    await service.addManyFromGallery('a1', [createMedia('m1'), createMedia('m2')]);
+
+    // UNA llamada nativa para todo el lote (el puente se cruza una vez)
+    expect(gallery.getMediaThumbnails).toHaveBeenCalledTimes(1);
+    expect(gallery.getMediaThumbnails).toHaveBeenCalledWith(
+      [
+        'content://media/external/images/media/m1',
+        'content://media/external/images/media/m2',
+      ],
+      { size: ALBUM_THUMB_SIZE, format: 'webp' },
+    );
+    // Un solo getLastByAlbum, no uno por foto
+    expect(repo.getLastByAlbum).toHaveBeenCalledTimes(1);
+
+    expect(repo.add).toHaveBeenCalledTimes(2);
+    const first = vi.mocked(repo.add).mock.calls[0][0];
+    const second = vi.mocked(repo.add).mock.calls[1][0];
+    expect(first.order).toBe(0);
+    expect(second.order).toBe(1);
+    expect(first.sourceUri).toBe('content://media/external/images/media/m1');
+    expect(second.sourceUri).toBe('content://media/external/images/media/m2');
+    expect(first.thumbnail).toBeInstanceOf(Blob);
+    await expect(first.thumbnail.text()).resolves.toBe('hello');
+    await expect(second.thumbnail.text()).resolves.toBe('world');
+  });
+
+  it('should skip failed thumbs and report them by name without aborting the batch', async () => {
+    vi.mocked(gallery.getMediaThumbnails).mockResolvedValue([
+      null, // m1 falla (URI muerta)
+      { data: 'd29ybGQ=', mimeType: 'image/webp', width: 512, height: 384 },
+    ]);
+    vi.mocked(repo.getLastByAlbum).mockResolvedValue(undefined);
+    vi.mocked(repo.add).mockResolvedValue(undefined as never);
+
+    try {
+      await service.addManyFromGallery('a1', [createMedia('m1'), createMedia('m2')]);
+      expect.unreachable();
+    } catch (err) {
+      expect((err as Error).message).toContain('foto.jpg');
+    }
+
+    // La foto que falló no se persiste; la del lote sí
+    expect(repo.add).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(repo.add).mock.calls[0][0].sourceUri).toBe(
+      'content://media/external/images/media/m2',
+    );
   });
 
   it('should resolve a mirror source through the native full compression', async () => {
