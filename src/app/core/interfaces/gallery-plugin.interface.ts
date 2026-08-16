@@ -40,6 +40,13 @@ export interface GalleryPluginInterface {
     format: 'webp' | 'jpeg';
     quality?: number;
   }): Promise<MediaResult>;
+  /** Batch de getMediaThumbnail: una llamada para N fotos, orden preservado. */
+  getMediaThumbnails(options: {
+    uris: string[];
+    size: number;
+    format: 'webp' | 'jpeg';
+    quality?: number;
+  }): Promise<{ thumbs: Array<MediaResult | null> }>;
   getMediaFull(options: {
     uri: string;
     maxSize?: number;
