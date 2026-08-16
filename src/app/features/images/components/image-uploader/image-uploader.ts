@@ -16,6 +16,9 @@ import { ImageService } from '../../services/image.service';
 import type { GalleryMedia } from '../../../../core/interfaces/gallery-plugin.interface';
 
 const PAGE_SIZE = 100;
+// Tope del plugin nativo: 50. Usamos 25 para dejar margen al payload del
+// puente (25 thumbs webp 512px ≈ 0.5-1.5MB por llamada) y progreso más fino.
+const BATCH_SIZE = 25;
 
 type PermissionStatus = 'unknown' | 'granted' | 'denied';
 
@@ -146,10 +149,11 @@ export class ImageUploader implements OnInit, OnDestroy {
   }
 
   /**
-   * Guardado SECUENCIAL (for + await): cada base64 se convierte a Blob y se
-   * suelta apenas termina. Disparar N promesas en paralelo acumularía N
-   * strings base64 en el heap del WebView → OOM. Una foto que falle no
-   * aborta el lote: se avisa y se sigue con la siguiente.
+   * Guardado en LOTES de BATCH_SIZE: cada lote es UNA llamada nativa
+   * (getMediaThumbnails) que genera los thumbs EN PARALELO en Kotlin y cruza
+   * el puente una sola vez, en vez de una llamada por foto. Los base64 del
+   * grid de cada lote se sueltan apenas termina (memoria/OOM). Un lote que
+   * falle no aborta el resto: se avisa y se sigue con el próximo.
    */
   async save(): Promise<void> {
     if (this.saving() || this.selected().size === 0) return;
@@ -160,15 +164,17 @@ export class ImageUploader implements OnInit, OnDestroy {
     const selected = [...this.selected().values()];
     this.savingProgress.set({ done: 0, total: selected.length });
 
-    for (const media of selected) {
+    for (let i = 0; i < selected.length; i += BATCH_SIZE) {
+      const batch = selected.slice(i, i + BATCH_SIZE);
       try {
-        await this.imageService.addFromGallery(albumId, media);
+        await this.imageService.addManyFromGallery(albumId, batch);
       } catch (err) {
-        this.error.set(`No se pudo guardar "${media.name}": ${this.message(err)}`);
+        // El error agregado ya trae los nombres de las fotos fallidas
+        this.error.set(this.message(err));
       }
-      // LIMPIEZA: soltamos el base64 del thumbnail (este item ya no se usa)
-      media.thumbnail = '';
-      this.savingProgress.update((p) => ({ ...p, done: p.done + 1 }));
+      // LIMPIEZA: soltamos los base64 del grid de este lote (ya no se usan)
+      for (const media of batch) media.thumbnail = '';
+      this.savingProgress.update((p) => ({ ...p, done: p.done + batch.length }));
     }
 
     // Dejamos que el template alcance a pintar el progreso final antes de salir
