@@ -54,6 +54,69 @@ export class ImageService {
   }
 
   /**
+   * Agrega un LOTE de fotos con UNA sola llamada nativa (`getMediaThumbnails`):
+   * los thumbs se generan en paralelo en Kotlin (pool de 4) y el puente se
+   * cruza una vez por lote, no una vez por foto.
+   *
+   * El `order` se calcula con UN solo `getLastByAlbum` (no uno por foto) y los
+   * `add` a Dexie son secuenciales — IndexedDB serializa las transacciones de
+   * todos modos, no se gana nada en paralelo ahí. Cada base64 → Blob se suelta
+   * apenas termina (ver base64.util.ts).
+   *
+   * Las fotos que fallen (null en el batch nativo) se reportan por nombre SIN
+   * abortar el resto del lote: al final lanza un error agregado con los
+   * nombres, y el llamador decide si avisarlo.
+   */
+  async addManyFromGallery(albumId: string, medias: GalleryMedia[]): Promise<void> {
+    if (medias.length === 0) return;
+
+    const thumbs = await this.gallery.getMediaThumbnails(
+      medias.map((m) => m.uri),
+      { size: ALBUM_THUMB_SIZE, format: 'webp' },
+    );
+
+    let order = (await this.imageRepo.getLastByAlbum(albumId))?.order ?? -1;
+    const failed: string[] = [];
+
+    for (let i = 0; i < medias.length; i++) {
+      const media = medias[i];
+      const thumb = thumbs[i];
+
+      // Posición preservada por el plugin: null = esa foto falló (URI muerta,
+      // thumb sin indexar, etc.) → se avisa y se sigue con la siguiente.
+      if (thumb == null) {
+        failed.push(media.name);
+        continue;
+      }
+
+      order += 1;
+      const x = 20 + ((order * 55) % 240);
+      const y = 20 + ((order * 35) % 560);
+
+      const image: Image = {
+        id: crypto.randomUUID(),
+        albumId,
+        sourceUri: media.uri,
+        thumbnail: base64ToBlob(thumb.data, thumb.mimeType),
+        thumbnailMime: thumb.mimeType,
+        filename: media.name,
+        mimeType: media.mimeType,
+        order,
+        position: { x, y },
+        createdAt: new Date(),
+      };
+
+      await this.imageRepo.add(image);
+    }
+
+    if (failed.length > 0) {
+      throw new Error(
+        `No se pudieron guardar ${failed.length} foto(s): ${failed.join(', ')}`,
+      );
+    }
+  }
+
+  /**
    * Resuelve la imagen full para el viewer a través del plugin (redimensionada
    * y comprimida en Kotlin, la full nunca cruza el puente). Si la URI murió
    * (foto borrada de la galería), el GalleryService lanza
