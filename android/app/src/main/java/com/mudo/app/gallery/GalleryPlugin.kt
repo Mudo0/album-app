@@ -68,6 +68,8 @@ class GalleryPlugin : Plugin() {
         private const val KIND_MINI = 1 // MediaStore.Images.Thumbnails.MINI_KIND
         /** Hilos del pool dedicado a los thumbs del grid (fijo: pico de RAM acotado). */
         private const val THUMB_THREADS = 4
+        /** Tope de fotos por llamada a getMediaThumbnails (validación defensiva). */
+        private const val MAX_BATCH_THUMBS = 50
     }
 
     // Ejecutor SERIAL: páginas de galería, thumbs de guardado y la full se
@@ -251,6 +253,60 @@ class GalleryPlugin : Plugin() {
         }
     }
 
+    // ── getMediaThumbnails (batch) ──────────────────────────────────────────
+
+    /**
+     * Versión por LOTE de getMediaThumbnail: una sola ida y vuelta del puente
+     * para N fotos (el guardado de un álbum hace N llamadas hoy).
+     *
+     * El lote se procesa EN PARALELO con el pool fijo (THUMB_THREADS) y el
+     * orden de entrada se preserva: `thumbs[i]` corresponde a `uris[i]`.
+     * Una uri inválida o muerta devuelve null en su posición — el JS reporta
+     * la foto fallida por nombre sin abortar el resto del lote.
+     */
+    @PluginMethod
+    fun getMediaThumbnails(call: PluginCall) {
+        if (!requirePermission(call)) return
+
+        val uris = call.getArray("uris") ?: run {
+            call.reject("uris requerida", EC_INVALID_ARGUMENT)
+            return
+        }
+        if (uris.length() !in 1..MAX_BATCH_THUMBS) {
+            call.reject("Se requieren entre 1 y $MAX_BATCH_THUMBS uris por lote.", EC_INVALID_ARGUMENT)
+            return
+        }
+        val maxSize = (call.getInt("size", 512) ?: 512).coerceIn(16, 4096)
+        val format = call.getString("format") ?: "webp"
+        val quality = (call.getInt("quality", 80) ?: 80).coerceIn(1, 100)
+
+        executor.execute {
+            try {
+                // Resolver uri + id ANTES del pool: parseId puede lanzar y no
+                // debe colarse dentro de un thread del pool (queda null).
+                val items: List<Pair<Uri, Long>?> = (0 until uris.length()).map { index ->
+                    val raw = uris.getString(index) ?: return@map null
+                    try {
+                        val uri = Uri.parse(raw)
+                        uri to ContentUris.parseId(uri)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+
+                val thumbs = buildThumbsInParallel(items, maxSize, format, quality)
+
+                val result = JSArray()
+                thumbs.forEach { result.put(toJSObject(it)) }
+                call.resolve(JSObject().apply { put("thumbs", result) })
+            } catch (e: SecurityException) {
+                call.reject("Se necesita permiso para leer la galería.", EC_ACCESS_DENIED)
+            } catch (e: Exception) {
+                call.reject("Error al procesar el lote: ${e.message}")
+            }
+        }
+    }
+
     // ── getMediaFull ────────────────────────────────────────────────────────
 
     @PluginMethod
@@ -292,11 +348,8 @@ class GalleryPlugin : Plugin() {
 
     /**
      * Genera los thumbs del grid EN PARALELO con el pool fijo (THUMB_THREADS).
-     *
-     * `invokeAll` ejecuta todas las tareas y devuelve los futures EN EL MISMO
-     * ORDEN de entrada, así el grid queda estable aunque un thumb tarde más que
-     * otro. Un thumb caído NUNCA rompe la página: devuelve null y el JS muestra
-     * un placeholder (el permiso ya se validó arriba, un fallo acá es un item
+     * Un thumb caído NUNCA rompe la página: devuelve null y el JS muestra un
+     * placeholder (el permiso ya se validó arriba, un fallo acá es un item
      * puntual: URI muerta, thumb sin indexar, etc.).
      */
     private fun buildGridThumbs(
@@ -304,15 +357,37 @@ class GalleryPlugin : Plugin() {
         size: Int,
         format: String,
         quality: Int,
-    ): List<CompressedImage?> {
-        if (rows.isEmpty()) return emptyList()
+    ): List<CompressedImage?> = buildThumbsInParallel(
+        rows.map { it.uri to it.id },
+        size,
+        format,
+        quality,
+    )
 
-        val tasks = rows.map { row ->
+    /**
+     * Núcleo compartido del paralelismo de thumbs: lanza una tarea por item al
+     * pool fijo (THUMB_THREADS) y espera todas con `invokeAll`, que devuelve
+     * los futures EN EL MISMO ORDEN de entrada — el resultado queda estable
+     * aunque un thumb tarde más que otro.
+     *
+     * Un item null (uri inválida) o un thumb caído devuelve null en su
+     * posición, sin abortar el resto del lote.
+     */
+    private fun buildThumbsInParallel(
+        items: List<Pair<Uri, Long>?>,
+        size: Int,
+        format: String,
+        quality: Int,
+    ): List<CompressedImage?> {
+        if (items.isEmpty()) return emptyList()
+
+        val tasks = items.map { item ->
             Callable {
                 try {
-                    loadThumb(row.uri, row.id, size, format, quality)
+                    val (uri, imageId) = item ?: return@Callable null
+                    loadThumb(uri, imageId, size, format, quality)
                 } catch (e: Exception) {
-                    null // un thumb caído no debe romper la página del grid
+                    null
                 }
             }
         }
@@ -381,18 +456,23 @@ class GalleryPlugin : Plugin() {
 
     // ── decode + compress (la full nunca cruza al JS) ───────────────────────
 
+    /** Serializa un thumb comprimido a JSObject (null se queda como null). */
+    private fun toJSObject(thumb: CompressedImage?): JSObject? {
+        if (thumb == null) return null
+        return JSObject().apply {
+            put("data", thumb.data)
+            put("mimeType", thumb.mimeType)
+            put("width", thumb.width)
+            put("height", thumb.height)
+        }
+    }
+
     private fun respondWith(result: CompressedImage?, call: PluginCall) {
         if (result == null) {
             call.reject("La imagen original ya no existe en la galería.", EC_MEDIA_NOT_FOUND)
             return
         }
-        val response = JSObject().apply {
-            put("data", result.data)
-            put("mimeType", result.mimeType)
-            put("width", result.width)
-            put("height", result.height)
-        }
-        call.resolve(response)
+        call.resolve(toJSObject(result))
     }
 
     private data class CompressedImage(
