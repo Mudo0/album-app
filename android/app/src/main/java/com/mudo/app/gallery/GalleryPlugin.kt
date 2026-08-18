@@ -35,8 +35,11 @@ import java.util.concurrent.Executors
  * comprimiendo EN KOTLIN, de modo que la imagen full nunca cruza el puente JS
  * (evita los strings base64 gigantes que matan el WebView por OOM).
  *
- * Thumbnails: se usan las MINIATURAS DEL SISTEMA (cache del MediaProvider),
- * nunca se decodifica la imagen original para el grid o el thumb del álbum:
+ * Thumbnails: getGallery devuelve SOLO metadatos (paginación instantánea,
+ * sin trabajo pesado por página). Los thumbs del picker y del álbum se piden
+ * BAJO DEMANDA con getMediaThumbnail/getMediaThumbnails (miniaturas del
+ * SISTEMA del MediaProvider, nunca se decodifica la imagen original para el
+ * grid):
  *  - API 29+: ContentResolver.loadThumbnail(uri, Size, null)
  *  - API 24-28: tabla MediaStore.Images.Thumbnails (MINI_KIND ~512px)
  * Las miniaturas del sistema ya vienen con la orientación EXIF aplicada → NO
@@ -63,10 +66,8 @@ class GalleryPlugin : Plugin() {
         private const val API_LEVEL_29 = 29
         private const val API_LEVEL_33 = 33
         private const val DEFAULT_PAGE_SIZE = 100
-        private const val GRID_THUMB_SIZE = 256
-        private const val GRID_THUMB_QUALITY = 70
         private const val KIND_MINI = 1 // MediaStore.Images.Thumbnails.MINI_KIND
-        /** Hilos del pool dedicado a los thumbs del grid (fijo: pico de RAM acotado). */
+        /** Hilos del pool dedicado a los thumbs (pico de RAM acotado). */
         private const val THUMB_THREADS = 4
         /** Tope de fotos por llamada a getMediaThumbnails (validación defensiva). */
         private const val MAX_BATCH_THUMBS = 50
@@ -139,7 +140,6 @@ class GalleryPlugin : Plugin() {
                 val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
 
                 val medias = JSArray()
-                val rows = mutableListOf<GalleryRow>()
                 var count = 0
 
                 // Paginación: la vía oficial (API 26+) es la QueryArgs API —
@@ -166,6 +166,8 @@ class GalleryPlugin : Plugin() {
                     )
                 }
 
+                // SOLO metadatos: los thumbs del picker se piden bajo demanda con
+                // getMediaThumbnails (ventana visible). Paginar es instantáneo.
                 cursor?.use {
                     // count < limit: guard extra por si algún provider ignora el Bundle
                     while (it.moveToNext() && count < limit) {
@@ -180,37 +182,18 @@ class GalleryPlugin : Plugin() {
                         val width = if (widthIdx >= 0) it.getInt(widthIdx) else 0
                         val height = if (heightIdx >= 0) it.getInt(heightIdx) else 0
 
-                        rows.add(
-                            GalleryRow(
-                                id = id,
-                                uri = ContentUris.withAppendedId(collection, id),
-                                name = name,
-                                mimeType = mimeType,
-                                width = width,
-                                height = height,
-                                dateAdded = dateAdded,
-                            ),
-                        )
+                        val item = JSObject().apply {
+                            put("id", id.toString())
+                            put("uri", ContentUris.withAppendedId(collection, id).toString())
+                            put("name", name)
+                            put("mimeType", mimeType)
+                            put("width", width)
+                            put("height", height)
+                            put("dateAdded", dateAdded)
+                        }
+                        medias.put(item)
                         count++
                     }
-                }
-
-                // Cursor ya liberado. Thumbs del SISTEMA (cache del MediaProvider)
-                // generados EN PARALELO con el pool fijo; el orden se preserva.
-                val thumbs = buildGridThumbs(rows, GRID_THUMB_SIZE, "jpeg", GRID_THUMB_QUALITY)
-
-                rows.forEachIndexed { index, row ->
-                    val item = JSObject().apply {
-                        put("id", row.id.toString())
-                        put("uri", row.uri.toString())
-                        put("name", row.name)
-                        put("mimeType", row.mimeType)
-                        put("width", row.width)
-                        put("height", row.height)
-                        put("dateAdded", row.dateAdded)
-                        put("thumbnail", thumbs[index]?.data.orEmpty())
-                    }
-                    medias.put(item)
                 }
 
                 val response = JSObject().apply {
@@ -333,36 +316,7 @@ class GalleryPlugin : Plugin() {
         }
     }
 
-    // ── Thumbnails del grid (en paralelo) ───────────────────────────────────
-
-    /** Una fila de la galería, con todo lo que el JS necesita para el grid. */
-    private data class GalleryRow(
-        val id: Long,
-        val uri: Uri,
-        val name: String,
-        val mimeType: String,
-        val width: Int,
-        val height: Int,
-        val dateAdded: Long,
-    )
-
-    /**
-     * Genera los thumbs del grid EN PARALELO con el pool fijo (THUMB_THREADS).
-     * Un thumb caído NUNCA rompe la página: devuelve null y el JS muestra un
-     * placeholder (el permiso ya se validó arriba, un fallo acá es un item
-     * puntual: URI muerta, thumb sin indexar, etc.).
-     */
-    private fun buildGridThumbs(
-        rows: List<GalleryRow>,
-        size: Int,
-        format: String,
-        quality: Int,
-    ): List<CompressedImage?> = buildThumbsInParallel(
-        rows.map { it.uri to it.id },
-        size,
-        format,
-        quality,
-    )
+    // ── Thumbnails en paralelo (núcleo compartido) ──────────────────────────
 
     /**
      * Núcleo compartido del paralelismo de thumbs: lanza una tarea por item al

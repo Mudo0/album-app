@@ -1,6 +1,10 @@
 import type { PermissionState } from '@capacitor/core';
 
-/** Item de la galería nativa tal como lo devuelve GalleryPlugin.getGallery. */
+/**
+ * Item de la galería nativa tal como lo devuelve GalleryPlugin.getGallery.
+ * SOLO metadatos: el picker pide los thumbnails bajo demanda con
+ * getMediaThumbnails (ventana visible + cache LRU), nunca vienen acá.
+ */
 export interface GalleryMedia {
   id: string;
   uri: string;
@@ -9,8 +13,6 @@ export interface GalleryMedia {
   width: number;
   height: number;
   dateAdded: number;
-  /** Thumbnail base64 (jpeg ~256px) para el grid de selección. */
-  thumbnail: string;
 }
 
 export interface GalleryResponse {
