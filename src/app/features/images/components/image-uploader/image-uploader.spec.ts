@@ -18,15 +18,22 @@ describe('ImageUploader', () => {
       width: 4000,
       height: 3000,
       dateAdded: 1700000000,
-      thumbnail: 'aGVsbG8=', // base64 de "hello"
     };
+  }
+
+  function thumbResult() {
+    return { data: 'aGVsbG8=', mimeType: 'image/jpeg' }; // base64 de "hello"
   }
 
   let getGallerySpy: ReturnType<typeof vi.fn>;
   let checkPermissionsSpy: ReturnType<typeof vi.fn>;
   let requestPermissionsSpy: ReturnType<typeof vi.fn>;
+  let getMediaThumbnailsSpy: ReturnType<typeof vi.fn>;
   let addManyFromGallerySpy: ReturnType<typeof vi.fn>;
   let navigationBackSpy: ReturnType<typeof vi.fn>;
+  let createObjectURLSpy: ReturnType<typeof vi.fn>;
+  let revokeObjectURLSpy: ReturnType<typeof vi.fn>;
+  let blobCounter: number;
 
   beforeEach(async () => {
     getGallerySpy = vi.fn().mockResolvedValue({ medias: [], hasMore: false });
@@ -36,8 +43,22 @@ describe('ImageUploader', () => {
     requestPermissionsSpy = vi
       .fn()
       .mockResolvedValue({ mediaLibrary: 'granted', storageLegacy: 'granted' });
+    getMediaThumbnailsSpy = vi.fn().mockResolvedValue([]);
     addManyFromGallerySpy = vi.fn().mockResolvedValue(undefined);
     navigationBackSpy = vi.fn();
+
+    blobCounter = 0;
+    createObjectURLSpy = vi.fn(() => `blob:fake-${blobCounter++}`);
+    revokeObjectURLSpy = vi.fn();
+    // jsdom no implementa createObjectURL/revokeObjectURL de verdad
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: createObjectURLSpy,
+      configurable: true,
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: revokeObjectURLSpy,
+      configurable: true,
+    });
 
     vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
 
@@ -52,6 +73,7 @@ describe('ImageUploader', () => {
           provide: GalleryService,
           useValue: {
             getGallery: getGallerySpy,
+            getMediaThumbnails: getMediaThumbnailsSpy,
             checkPermissions: checkPermissionsSpy,
             requestPermissions: requestPermissionsSpy,
           },
@@ -62,6 +84,7 @@ describe('ImageUploader', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   function createFixture() {
@@ -100,8 +123,8 @@ describe('ImageUploader', () => {
 
     const component = fixture.componentInstance as ImageUploader;
     expect(component.medias().length).toBe(2);
+    expect(component.rows().length).toBe(1); // 2 fotos = 1 fila de 3
     expect(component.permission()).toBe('granted');
-    expect(fixture.nativeElement.querySelectorAll('.media-item').length).toBe(2);
   });
 
   it('should show the native-only notice on web', async () => {
@@ -164,7 +187,7 @@ describe('ImageUploader', () => {
     expect(component.isSelected(m1.id)).toBe(false);
   });
 
-  it('should load the next page when scrolling near the bottom', async () => {
+  it('should load the next page when scrolled near the bottom', async () => {
     getGallerySpy
       .mockResolvedValueOnce({ medias: [createMedia('1')], hasMore: true })
       .mockResolvedValueOnce({ medias: [createMedia('2')], hasMore: false });
@@ -174,9 +197,7 @@ describe('ImageUploader', () => {
     fixture.detectChanges();
 
     const component = fixture.componentInstance as ImageUploader;
-    component.onScroll({
-      target: { scrollTop: 900, clientHeight: 400, scrollHeight: 1500 },
-    } as unknown as Event);
+    component.onScrolledIndex(0); // sin layout (jsdom) la ventana cubre todo
     await flush();
     fixture.detectChanges();
 
@@ -256,5 +277,170 @@ describe('ImageUploader', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('no hay galería');
+  });
+
+  // ── Lazy thumbs: debounce + batch por ventana + cache LRU ────────────────
+
+  it('should lazily fetch the rendered window in one debounced batch', async () => {
+    vi.useFakeTimers();
+    getGallerySpy.mockResolvedValue({
+      medias: [createMedia('1'), createMedia('2'), createMedia('3'), createMedia('4')],
+      hasMore: false,
+    });
+    getMediaThumbnailsSpy.mockResolvedValue([
+      thumbResult(),
+      thumbResult(),
+      thumbResult(),
+      thumbResult(),
+    ]);
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0); // ngOnInit: permisos + primera página
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    // En jsdom no hay layout: el CDK considera "visible" todo el contenido y
+    // ya encoló las 4 fotos en su rango inicial (en el dispositivo real solo
+    // encola la ventana visible). El onRenderedRange manual no re-encola nada.
+    component.onRenderedRange({ start: 0, end: 1 });
+    expect(getMediaThumbnailsSpy).not.toHaveBeenCalled(); // debounce activo
+
+    await vi.advanceTimersByTimeAsync(120); // se dispara el flush
+
+    expect(getMediaThumbnailsSpy).toHaveBeenCalledTimes(1);
+    expect(getMediaThumbnailsSpy).toHaveBeenCalledWith(
+      [
+        'content://media/external/images/media/1',
+        'content://media/external/images/media/2',
+        'content://media/external/images/media/3',
+        'content://media/external/images/media/4',
+      ],
+      { size: 256, format: 'jpeg' },
+    );
+    expect(component.thumbSrc(component.medias()[0])).toBe('blob:fake-0');
+    expect(component.thumbSrc(component.medias()[3])).toBe('blob:fake-3');
+  });
+
+  it('should not re-fetch thumbs already in cache when the range repeats', async () => {
+    vi.useFakeTimers();
+    getGallerySpy.mockResolvedValue({
+      medias: [createMedia('1'), createMedia('2'), createMedia('3')],
+      hasMore: false,
+    });
+    getMediaThumbnailsSpy.mockResolvedValue([thumbResult(), thumbResult(), thumbResult()]);
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    component.onRenderedRange({ start: 0, end: 1 });
+    await vi.advanceTimersByTimeAsync(120);
+    expect(getMediaThumbnailsSpy).toHaveBeenCalledTimes(1);
+
+    component.onRenderedRange({ start: 0, end: 1 }); // mismo rango, ya cacheados
+    await vi.advanceTimersByTimeAsync(120);
+    expect(getMediaThumbnailsSpy).toHaveBeenCalledTimes(1); // sin llamada extra
+  });
+
+  it('should queue thumbs while a batch is in flight and flush them after', async () => {
+    vi.useFakeTimers();
+    const uris = [
+      'content://media/external/images/media/1',
+      'content://media/external/images/media/2',
+      'content://media/external/images/media/3',
+      'content://media/external/images/media/4',
+      'content://media/external/images/media/5',
+      'content://media/external/images/media/6',
+    ];
+    getGallerySpy.mockResolvedValue({
+      medias: uris.map((_, i) => createMedia(String(i + 1))),
+      hasMore: false,
+    });
+    let resolveFirst!: (value: unknown) => void;
+    getMediaThumbnailsSpy
+      .mockReturnValueOnce(new Promise((r) => (resolveFirst = r)))
+      .mockResolvedValueOnce(uris.map(() => thumbResult()));
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    component.onRenderedRange({ start: 0, end: 2 });
+    await vi.advanceTimersByTimeAsync(120); // flush #1 queda EN VUELO
+    expect(getMediaThumbnailsSpy).toHaveBeenCalledTimes(1);
+    expect(getMediaThumbnailsSpy).toHaveBeenCalledWith(uris, { size: 256, format: 'jpeg' });
+
+    // Durante el vuelo llegan pendientes nuevos (mismo rango re-emitido)
+    component.onRenderedRange({ start: 0, end: 2 });
+    await vi.advanceTimersByTimeAsync(120); // el flush se frena: 1 en vuelo
+    expect(getMediaThumbnailsSpy).toHaveBeenCalledTimes(1); // sigue 1
+
+    resolveFirst(uris.map(() => thumbResult())); // termina el #1
+    await vi.advanceTimersByTimeAsync(0); // el finally re-agenda los pendientes
+    await vi.advanceTimersByTimeAsync(120); // flush #2 con lo que quedó
+
+    expect(getMediaThumbnailsSpy).toHaveBeenCalledTimes(2);
+    expect(getMediaThumbnailsSpy).toHaveBeenLastCalledWith(uris, { size: 256, format: 'jpeg' });
+    expect(component.thumbs().size).toBe(6);
+  });
+
+  it('should split a large rendered range into chunks of 25 and evict the LRU', async () => {
+    vi.useFakeTimers();
+    // 240 fotos = 80 filas: el flush manda 240 pendientes en trozos de 25
+    // (10 llamadas, el plugin valida máx. 50) y el LRU (max 200) evicta 40.
+    const medias = Array.from({ length: 240 }, (_, i) => createMedia(String(i)));
+    getGallerySpy.mockResolvedValue({ medias, hasMore: false });
+    getMediaThumbnailsSpy.mockImplementation((uris: string[]) =>
+      Promise.resolve(uris.map(() => thumbResult())),
+    );
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    component.onRenderedRange({ start: 0, end: 80 });
+    await vi.advanceTimersByTimeAsync(120);
+
+    expect(getMediaThumbnailsSpy).toHaveBeenCalledTimes(10); // 9x25 + 1x15
+    expect(component.thumbs().size).toBe(200); // tope del LRU
+    // Evictados los 40 más viejos (ids 0..39), revocados al evictar
+    expect(component.thumbSrc(medias[0])).toBe('');
+    expect(component.thumbSrc(medias[39])).toBe('');
+    expect(component.thumbSrc(medias[40])).not.toBe('');
+    expect(revokeObjectURLSpy).toHaveBeenCalledTimes(40);
+  });
+
+  it('should revoke all object URLs when the component is destroyed', async () => {
+    vi.useFakeTimers();
+    getGallerySpy.mockResolvedValue({
+      medias: [createMedia('1'), createMedia('2'), createMedia('3'),
+        createMedia('4'), createMedia('5'), createMedia('6')],
+      hasMore: false,
+    });
+    getMediaThumbnailsSpy.mockResolvedValue([
+      thumbResult(),
+      thumbResult(),
+      thumbResult(),
+      thumbResult(),
+      thumbResult(),
+      thumbResult(),
+    ]);
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    component.onRenderedRange({ start: 0, end: 2 });
+    await vi.advanceTimersByTimeAsync(120);
+    expect(component.thumbs().size).toBe(6);
+    expect(revokeObjectURLSpy).not.toHaveBeenCalled(); // nada evictado aún
+
+    fixture.destroy();
+
+    expect(revokeObjectURLSpy).toHaveBeenCalledTimes(6); // revoke total en destroy
   });
 });

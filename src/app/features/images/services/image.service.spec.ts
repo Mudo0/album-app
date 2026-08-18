@@ -47,7 +47,6 @@ describe('ImageService', () => {
       width: 4000,
       height: 3000,
       dateAdded: 1700000000,
-      thumbnail: 'aGVsbG8=', // base64 de "hello"
     };
   }
 
