@@ -16,11 +16,13 @@ describe('AlbumDetail', () => {
   };
 
   function createMockImage(overrides: Partial<Image> = {}): Image {
-    const blob = new Blob(['fake'], { type: 'image/jpeg' });
+    const blob = new Blob(['fake'], { type: 'image/webp' });
     return {
       id: 'img1',
       albumId: 'a1',
-      data: blob,
+      sourceUri: 'content://media/external/images/media/1',
+      thumbnail: blob,
+      thumbnailMime: 'image/webp',
       filename: 'foto.jpg',
       mimeType: 'image/jpeg',
       order: 0,

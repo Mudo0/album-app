@@ -109,7 +109,9 @@ export class AlbumDetail implements OnInit, OnDestroy {
       ...img,
       x: img.position?.x ?? 20 + ((i * 55) % 240),
       y: img.position?.y ?? 20 + ((i * 35) % 560),
-      objectUrl: URL.createObjectURL(new Blob([img.data], { type: img.mimeType })),
+      objectUrl: URL.createObjectURL(
+        new Blob([img.thumbnail], { type: img.thumbnailMime }),
+      ),
     }));
 
     // Revocar las viejas recién acá: durante el await los stickers visibles

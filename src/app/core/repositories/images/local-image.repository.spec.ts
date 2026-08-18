@@ -38,7 +38,9 @@ describe('LocalImageRepository', () => {
   const mockImage: Image = {
     id: 'img1',
     albumId: 'a1',
-    data: new Blob(['fake'], { type: 'image/jpeg' }),
+    sourceUri: 'content://media/external/images/media/1',
+    thumbnail: new Blob(['fake'], { type: 'image/webp' }),
+    thumbnailMime: 'image/webp',
     filename: 'foto.jpg',
     mimeType: 'image/jpeg',
     order: 0,
