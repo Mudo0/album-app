@@ -25,9 +25,12 @@
 
 .main {
   flex: 1;
-  overflow-y: auto;
-  padding: 0 16px 24px;
-  -webkit-overflow-scrolling: touch;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* El scroll lo maneja cdk-virtual-scroll-viewport; si .main scrollea,
+     el viewport interno nunca mide su altura real. */
+  overflow: hidden;
 }
 
 /* ---- Avisos ---- */
@@ -91,17 +94,31 @@
   cursor: pointer;
 }
 
-/* ---- Grid ---- */
+/* ---- Grid (virtual scroll) ---- */
 
-.grid {
+/* Contenedor del scroll virtual: ocupa todo el alto que deje el header.
+   El CDK le da overflow:auto; acá solo se acota el alto. */
+.grid-viewport {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Cada item virtual es una fila de COLS fotos. La altura la fija el
+   componente (itemSize, [style.height.px]) y el 1fr del grid se ajusta.
+   El padding lateral entra en la cuenta del rowHeight en TS. */
+.grid-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 1fr;
   gap: 6px;
+  padding: 0 16px;
+  box-sizing: border-box;
 }
 
 .media-item {
   aspect-ratio: 1;
   position: relative;
+  width: 100%;
   border: none;
   padding: 0;
   border-radius: 8px;
@@ -115,6 +132,11 @@
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+/* Placeholder mientras llega el thumb del batch (o si el thumb falló). */
+.media-img.placeholder {
+  background: #e4e4e7;
 }
 
 .media-item.selected {

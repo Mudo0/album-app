@@ -4,7 +4,7 @@
   <div class="spacer"></div>
 </header>
 
-<main class="main" (scroll)="onScroll($event)">
+<main class="main">
   @if (!isNative) {
     <div class="notice">
       📱 La galería está disponible solo en la app Android. Probá este flujo
@@ -34,21 +34,40 @@
       </div>
     }
 
-    <div class="grid">
-      @for (media of medias(); track media.id) {
-        <button
-          class="media-item"
-          [class.selected]="isSelected(media.id)"
-          (click)="toggle(media)"
-          [disabled]="saving()"
-        >
-          <img class="media-img" [src]="thumbSrc(media)" [alt]="media.name" />
-          @if (isSelected(media.id)) {
-            <span class="check">✓</span>
-          }
-        </button>
-      }
-    </div>
+    <!-- Virtual scroll: cada item es UNA FILA del grid (3 fotos). El CDK solo
+         monta la ventana visible + overscan, así el DOM queda acotado sin
+         importar cuántas páginas se cargaron. Los thumbs se piden por batch
+         (getMediaThumbnails) según el rango renderizado y se cachean en un
+         LRU de objectURLs. -->
+    <cdk-virtual-scroll-viewport
+      class="grid-viewport"
+      [itemSize]="rowHeight()"
+    >
+      <div
+        class="grid-row"
+        *cdkVirtualFor="let row of rows(); trackBy: trackRow"
+        [style.height.px]="rowHeight()"
+      >
+        @for (media of row; track media.id) {
+          <button
+            class="media-item"
+            [class.selected]="isSelected(media.id)"
+            [attr.aria-pressed]="isSelected(media.id)"
+            (click)="toggle(media)"
+            [disabled]="saving()"
+          >
+            @if (thumbSrc(media); as thumb) {
+              <img class="media-img" [src]="thumb" [alt]="media.name" />
+            } @else {
+              <span class="media-img placeholder" aria-hidden="true"></span>
+            }
+            @if (isSelected(media.id)) {
+              <span class="check">✓</span>
+            }
+          </button>
+        }
+      </div>
+    </cdk-virtual-scroll-viewport>
 
     @if (loading()) {
       <p class="loading">Cargando...</p>
