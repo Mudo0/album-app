@@ -201,3 +201,49 @@
   transform: scale(0.92);
   box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
 }
+
+/* ---- Long-press indicator ---- */
+
+.sticker.long-pressing {
+  outline: 3px solid #4f46e5;
+  outline-offset: 2px;
+  transform: scale(1.04);
+}
+
+/* ---- Toast ---- */
+
+.toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a2e;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 1000;
+  animation: toast-in 0.2s ease-out, toast-out 0.2s ease-in 1.8s forwards;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
