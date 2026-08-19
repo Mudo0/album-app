@@ -5,6 +5,7 @@ import { GalleryService } from '../../../core/services/gallery.service';
 import { ClipboardService } from '../../../core/services/clipboard.service';
 import type { GalleryMedia } from '../../../core/interfaces/gallery-plugin.interface';
 import { GalleryError } from '../../../core/services/gallery.service';
+import { Capacitor } from '@capacitor/core';
 
 describe('ImageService', () => {
   const repo = {
@@ -169,11 +170,14 @@ describe('ImageService', () => {
 
   it('should resolve a mirror source through the native full compression', async () => {
     vi.mocked(gallery.getMediaFull).mockResolvedValue({
-      data: 'ZGF0YQ==',
+      filePath: '/data/user/0/com.mudo.app/cache/viewer/viewer_temp.webp',
       mimeType: 'image/webp',
       width: 1920,
       height: 1080,
     });
+    vi.spyOn(Capacitor, 'convertFileSrc').mockImplementation(
+      (path) => `http://localhost/_capacitor_file_${path}`,
+    );
 
     const url = await service.resolveSource({
       id: 'img1',
@@ -191,7 +195,12 @@ describe('ImageService', () => {
     expect(gallery.getMediaFull).toHaveBeenCalledWith(
       'content://media/external/images/media/1',
     );
-    expect(url).toBe('data:image/webp;base64,ZGF0YQ==');
+    expect(Capacitor.convertFileSrc).toHaveBeenCalledWith(
+      '/data/user/0/com.mudo.app/cache/viewer/viewer_temp.webp',
+    );
+    expect(url).toBe(
+      'http://localhost/_capacitor_file_/data/user/0/com.mudo.app/cache/viewer/viewer_temp.webp',
+    );
   });
 
   it('should propagate mediaNotFound from a dead URI', async () => {
