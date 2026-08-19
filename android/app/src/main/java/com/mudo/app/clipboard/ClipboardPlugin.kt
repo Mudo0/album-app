@@ -121,7 +121,7 @@ class ClipboardPlugin : Plugin() {
                 @Suppress("DEPRECATION")
                 val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
                 vibrator.vibrate(
-                    VibrationEffect.createOneShot(VIBRATE_MS, VIBRATE_DEFAULT_AMPLITUDE),
+                    VibrationEffect.createOneShot(VIBRATE_MS, VibrationEffect.DEFAULT_AMPLITUDE),
                 )
             }
         } catch (_: Exception) {
