@@ -1,0 +1,458 @@
+package com.mudo.app.gallery
+
+import android.Manifest
+import android.content.ContentResolver
+import android.content.ContentUris
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.provider.MediaStore
+import android.util.Size
+import com.getcapacitor.JSArray
+import com.getcapacitor.JSObject
+import com.getcapacitor.PermissionState
+import com.getcapacitor.Plugin
+import com.getcapacitor.PluginCall
+import com.getcapacitor.PluginMethod
+import com.getcapacitor.annotation.CapacitorPlugin
+import com.getcapacitor.annotation.Permission
+import com.getcapacitor.annotation.PermissionCallback
+import java.io.FileNotFoundException
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+
+/**
+ * Plugin nativo de galería — "espejo" del MediaStore.
+ *
+ * La app NO copia las fotos a su storage: guarda la `sourceUri` nativa
+ * (content://media/...) y este plugin resuelve la lectura redimensionando y
+ * comprimiendo EN KOTLIN, de modo que la imagen full nunca cruza el puente JS
+ * (evita los strings base64 gigantes que matan el WebView por OOM).
+ *
+ * Thumbnails: getGallery devuelve SOLO metadatos (paginación instantánea,
+ * sin trabajo pesado por página). Los thumbs del picker y del álbum se piden
+ * BAJO DEMANDA con getMediaThumbnail/getMediaThumbnails (miniaturas del
+ * SISTEMA del MediaProvider, nunca se decodifica la imagen original para el
+ * grid):
+ *  - API 29+: ContentResolver.loadThumbnail(uri, Size, null)
+ *  - API 24-28: tabla MediaStore.Images.Thumbnails (MINI_KIND ~512px)
+ * Las miniaturas del sistema ya vienen con la orientación EXIF aplicada → NO
+ * se rotan.
+ *
+ * La lógica de decodificación y compresión de imágenes está extraída a
+ * [ImageDecoder] — compartida con ClipboardPlugin.
+ */
+@CapacitorPlugin(
+    name = "Gallery",
+    permissions = [
+        // Android 13+: permisos granulares de media
+        Permission(alias = "mediaLibrary", strings = [Manifest.permission.READ_MEDIA_IMAGES]),
+        // Android 12 y menor: storage legacy (el maxSdkVersion=32 lo define el manifest)
+        Permission(alias = "storageLegacy", strings = [Manifest.permission.READ_EXTERNAL_STORAGE]),
+    ],
+)
+class GalleryPlugin : Plugin() {
+
+    companion object {
+        const val EC_MEDIA_NOT_FOUND = "mediaNotFound"
+        const val EC_ACCESS_DENIED = "accessDenied"
+        const val EC_INVALID_ARGUMENT = "invalidArgument"
+
+        private const val API_LEVEL_26 = 26
+        private const val API_LEVEL_29 = 29
+        private const val API_LEVEL_33 = 33
+        private const val DEFAULT_PAGE_SIZE = 100
+        private const val KIND_MINI = 1 // MediaStore.Images.Thumbnails.MINI_KIND
+        /** Hilos del pool dedicado a los thumbs (pico de RAM acotado). */
+        private const val THUMB_THREADS = 4
+        /** Tope de fotos por llamada a getMediaThumbnails (validación defensiva). */
+        private const val MAX_BATCH_THUMBS = 50
+        /** Directorio y nombre fijo del archivo temporal del viewer (se sobreescribe). */
+        private const val VIEWER_DIR = "viewer"
+        private const val VIEWER_TEMP_FILE = "viewer_temp.webp"
+    }
+
+    // Ejecutor SERIAL: páginas de galería, thumbs de guardado y la full se
+    // procesan uno a la vez (requisito de memoria del proyecto); la UI nunca
+    // se congela.
+    private val executor = Executors.newSingleThreadExecutor()
+
+    // Pool FIJO solo para los thumbs del GRID: los 100 de una página se generan
+    // en paralelo (~4x más rápido que en serie). Los bitmaps son de 256px y se
+    // reciclan al instante, así el pico de memoria queda acotado a THUMB_THREADS
+    // decodificaciones simultáneas — nunca 100.
+    private val thumbExecutor = Executors.newFixedThreadPool(THUMB_THREADS)
+
+    // ── Permisos ────────────────────────────────────────────────────────────
+
+    private fun mediaPermissionGranted(): Boolean {
+        return if (Build.VERSION.SDK_INT >= API_LEVEL_33) {
+            getPermissionState("mediaLibrary") == PermissionState.GRANTED
+        } else {
+            getPermissionState("storageLegacy") == PermissionState.GRANTED
+        }
+    }
+
+    private fun requirePermission(call: PluginCall): Boolean {
+        if (mediaPermissionGranted()) return true
+        call.reject("Se necesita permiso para leer la galería.", EC_ACCESS_DENIED)
+        return false
+    }
+
+    @PluginMethod
+    override fun checkPermissions(call: PluginCall) {
+        val result = JSObject().apply {
+            put("mediaLibrary", getPermissionState("mediaLibrary").toString())
+            put("storageLegacy", getPermissionState("storageLegacy").toString())
+        }
+        call.resolve(result)
+    }
+
+    @PluginMethod
+    override fun requestPermissions(call: PluginCall) {
+        if (!mediaPermissionGranted()) {
+            requestAllPermissions(call, "permissionsCallback")
+        } else {
+            checkPermissions(call)
+        }
+    }
+
+    @PermissionCallback
+    private fun permissionsCallback(call: PluginCall) {
+        checkPermissions(call)
+    }
+
+    // ── getGallery ──────────────────────────────────────────────────────────
+
+    @PluginMethod
+    fun getGallery(call: PluginCall) {
+        if (!requirePermission(call)) return
+
+        val limit = (call.getInt("limit", DEFAULT_PAGE_SIZE) ?: DEFAULT_PAGE_SIZE)
+            .coerceIn(1, 200)
+        val offset = (call.getInt("offset", 0) ?: 0).coerceAtLeast(0)
+
+        executor.execute {
+            try {
+                val resolver = getContext().contentResolver
+                val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
+
+                val medias = JSArray()
+                var count = 0
+
+                // Paginación: la vía oficial (API 26+) es la QueryArgs API —
+                // ContentResolver.query(Uri, String[], Bundle, CancellationSignal),
+                // con LIMIT/OFFSET/SORT dentro del Bundle. Inyectar LIMIT en el
+                // sortOrder de la query clásica es un truco no garantizado
+                // (depende del MediaProvider); solo se usa en API 24-25, donde
+                // la overload con Bundle no existe.
+                val cursor = if (Build.VERSION.SDK_INT >= API_LEVEL_26) {
+                    val queryArgs = Bundle().apply {
+                        putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER, sortOrder)
+                        putInt(ContentResolver.QUERY_ARG_LIMIT, limit)
+                        putInt(ContentResolver.QUERY_ARG_OFFSET, offset)
+                    }
+                    resolver.query(collection, null, queryArgs, null)
+                } else {
+                    resolver.query(
+                        collection,
+                        null,
+                        null,
+                        null,
+                        "$sortOrder LIMIT $limit OFFSET $offset",
+                        null,
+                    )
+                }
+
+                // SOLO metadatos: los thumbs del picker se piden bajo demanda con
+                // getMediaThumbnails (ventana visible). Paginar es instantáneo.
+                cursor?.use {
+                    // count < limit: guard extra por si algún provider ignora el Bundle
+                    while (it.moveToNext() && count < limit) {
+                        val id = it.getLong(it.getColumnIndexOrThrow(MediaStore.Images.Media._ID))
+                        val name = it.getString(it.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME))
+                        val mimeType = it.getString(it.getColumnIndexOrThrow(MediaStore.Images.Media.MIME_TYPE))
+                        val dateAdded = it.getLong(it.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED))
+
+                        // WIDTH/HEIGHT existen recién en API 29+; si faltan, 0 y el JS los ignora
+                        val widthIdx = it.getColumnIndex(MediaStore.Images.Media.WIDTH)
+                        val heightIdx = it.getColumnIndex(MediaStore.Images.Media.HEIGHT)
+                        val width = if (widthIdx >= 0) it.getInt(widthIdx) else 0
+                        val height = if (heightIdx >= 0) it.getInt(heightIdx) else 0
+
+                        val item = JSObject().apply {
+                            put("id", id.toString())
+                            put("uri", ContentUris.withAppendedId(collection, id).toString())
+                            put("name", name)
+                            put("mimeType", mimeType)
+                            put("width", width)
+                            put("height", height)
+                            put("dateAdded", dateAdded)
+                        }
+                        medias.put(item)
+                        count++
+                    }
+                }
+
+                val response = JSObject().apply {
+                    put("medias", medias)
+                    // Página exacta => asumimos que hay más (falso positivo tolerable)
+                    put("hasMore", count == limit)
+                }
+                call.resolve(response)
+            } catch (e: SecurityException) {
+                call.reject("Se necesita permiso para leer la galería.", EC_ACCESS_DENIED)
+            } catch (e: Exception) {
+                call.reject("Error al leer la galería: ${e.message}")
+            }
+        }
+    }
+
+    // ── getMediaThumbnail ───────────────────────────────────────────────────
+
+    @PluginMethod
+    fun getMediaThumbnail(call: PluginCall) {
+        if (!requirePermission(call)) return
+
+        val uri = call.getString("uri") ?: run {
+            call.reject("uri requerida", EC_INVALID_ARGUMENT)
+            return
+        }
+        val maxSize = (call.getInt("size", 512) ?: 512).coerceIn(16, 4096)
+        val format = call.getString("format") ?: "webp"
+        val quality = (call.getInt("quality", 80) ?: 80).coerceIn(1, 100)
+
+        executor.execute {
+            val parsed = Uri.parse(uri)
+            val imageId = ContentUris.parseId(parsed)
+            val result = try {
+                loadThumb(parsed, imageId, maxSize, format, quality)
+            } catch (e: Exception) {
+                null
+            }
+            respondWith(result, call)
+        }
+    }
+
+    // ── getMediaThumbnails (batch) ──────────────────────────────────────────
+
+    /**
+     * Versión por LOTE de getMediaThumbnail: una sola ida y vuelta del puente
+     * para N fotos (el guardado de un álbum hace N llamadas hoy).
+     *
+     * El lote se procesa EN PARALELO con el pool fijo (THUMB_THREADS) y el
+     * orden de entrada se preserva: `thumbs[i]` corresponde a `uris[i]`.
+     * Una uri inválida o muerta devuelve null en su posición — el JS reporta
+     * la foto fallida por nombre sin abortar el resto del lote.
+     */
+    @PluginMethod
+    fun getMediaThumbnails(call: PluginCall) {
+        if (!requirePermission(call)) return
+
+        val uris = call.getArray("uris") ?: run {
+            call.reject("uris requerida", EC_INVALID_ARGUMENT)
+            return
+        }
+        if (uris.length() !in 1..MAX_BATCH_THUMBS) {
+            call.reject("Se requieren entre 1 y $MAX_BATCH_THUMBS uris por lote.", EC_INVALID_ARGUMENT)
+            return
+        }
+        val maxSize = (call.getInt("size", 512) ?: 512).coerceIn(16, 4096)
+        val format = call.getString("format") ?: "webp"
+        val quality = (call.getInt("quality", 80) ?: 80).coerceIn(1, 100)
+
+        executor.execute {
+            try {
+                // Resolver uri + id ANTES del pool: parseId puede lanzar y no
+                // debe colarse dentro de un thread del pool (queda null).
+                val items: List<Pair<Uri, Long>?> = (0 until uris.length()).map { index ->
+                    val raw = uris.getString(index) ?: return@map null
+                    try {
+                        val uri = Uri.parse(raw)
+                        uri to ContentUris.parseId(uri)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+
+                val thumbs = buildThumbsInParallel(items, maxSize, format, quality)
+
+                val result = JSArray()
+                thumbs.forEach { result.put(toJSObject(it)) }
+                call.resolve(JSObject().apply { put("thumbs", result) })
+            } catch (e: SecurityException) {
+                call.reject("Se necesita permiso para leer la galería.", EC_ACCESS_DENIED)
+            } catch (e: Exception) {
+                call.reject("Error al procesar el lote: ${e.message}")
+            }
+        }
+    }
+
+    // ── getMediaFull ────────────────────────────────────────────────────────
+
+    /**
+     * Decodifica la imagen full, la comprime y la escribe a un archivo temporal
+     * en cache dir. Devuelve el file path en vez de base64 — la WebView lo
+     * convierte a URL segura con Capacitor.convertFileSrc() y el <img> streama
+     * del disco a la GPU sin cargar bytes en el heap de JS.
+     */
+    @PluginMethod
+    fun getMediaFull(call: PluginCall) {
+        if (!requirePermission(call)) return
+
+        val uri = call.getString("uri") ?: run {
+            call.reject("uri requerida", EC_INVALID_ARGUMENT)
+            return
+        }
+        val maxSize = (call.getInt("maxSize", 2048) ?: 2048).coerceIn(16, 8192)
+        val format = call.getString("format") ?: "webp"
+        val quality = (call.getInt("quality", 82) ?: 82).coerceIn(1, 100)
+
+        executor.execute {
+            try {
+                val compressed = ImageDecoder.decodeAndCompressBytes(
+                    context.contentResolver, Uri.parse(uri), maxSize, format, quality,
+                )
+                if (compressed == null) {
+                    call.reject("La imagen original ya no existe en la galería.", EC_MEDIA_NOT_FOUND)
+                    return@execute
+                }
+
+                // Escribir a archivo temporal (nombre fijo, se sobreescribe)
+                val viewerDir = java.io.File(context.cacheDir, VIEWER_DIR)
+                viewerDir.mkdirs()
+                val tempFile = java.io.File(viewerDir, VIEWER_TEMP_FILE)
+                tempFile.writeBytes(compressed.bytes)
+
+                val result = JSObject().apply {
+                    put("filePath", tempFile.absolutePath)
+                    put("mimeType", compressed.mimeType)
+                    put("width", compressed.width)
+                    put("height", compressed.height)
+                }
+                call.resolve(result)
+            } catch (e: SecurityException) {
+                call.reject("Se necesita permiso para leer la galería.", EC_ACCESS_DENIED)
+            } catch (e: Exception) {
+                call.reject("Error al procesar la imagen: ${e.message}")
+            }
+        }
+    }
+
+    // ── Thumbnails en paralelo (núcleo compartido) ──────────────────────────
+
+    /**
+     * Núcleo compartido del paralelismo de thumbs: lanza una tarea por item al
+     * pool fijo (THUMB_THREADS) y espera todas con `invokeAll`, que devuelve
+     * los futures EN EL MISMO ORDEN de entrada — el resultado queda estable
+     * aunque un thumb tarde más que otro.
+     *
+     * Un item null (uri inválida) o un thumb caído devuelve null en su
+     * posición, sin abortar el resto del lote.
+     */
+    private fun buildThumbsInParallel(
+        items: List<Pair<Uri, Long>?>,
+        size: Int,
+        format: String,
+        quality: Int,
+    ): List<ImageDecoder.CompressedImage?> {
+        if (items.isEmpty()) return emptyList()
+
+        val tasks = items.map { item ->
+            Callable {
+                try {
+                    val (uri, imageId) = item ?: return@Callable null
+                    loadThumb(uri, imageId, size, format, quality)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+        }
+        val futures = thumbExecutor.invokeAll(tasks)
+        return futures.map { future ->
+            try {
+                future.get()
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    // ── Thumbnails del sistema ──────────────────────────────────────────────
+
+    /**
+     * Miniatura cacheada del MediaProvider, sin decodificar la imagen original.
+     * Devuelve null si no existe (URI muerta, galería aún no indexada, etc.).
+     * Los thumbs del sistema YA vienen con orientación aplicada: no rotar.
+     */
+    private fun loadThumb(uri: Uri, imageId: Long, size: Int, format: String, quality: Int): ImageDecoder.CompressedImage? {
+        val resolver = getContext().contentResolver
+        return try {
+            val bitmap = if (Build.VERSION.SDK_INT >= API_LEVEL_29) {
+                resolver.loadThumbnail(uri, Size(size, size), null)
+            } else {
+                loadLegacySystemThumb(resolver, imageId) ?: return null
+            }
+            // Thumbnails del sistema: ya orientados, solo comprimir
+            ImageDecoder.compressBitmap(bitmap, size, format, quality)
+        } catch (e: FileNotFoundException) {
+            null
+        } catch (e: SecurityException) {
+            throw e // acceso denegado: debe llegar tipado a la capa JS
+        } catch (e: Exception) {
+            null // un thumb caído no debe romper la página del grid
+        }
+    }
+
+    /**
+     * API 24-28: thumbnails cacheados de la tabla MediaStore.Images.Thumbnails
+     * (MINI_KIND ≈ 512px). También ya orientados por el sistema.
+     */
+    @Suppress("DEPRECATION")
+    private fun loadLegacySystemThumb(resolver: ContentResolver, imageId: Long): Bitmap? {
+        val projection = arrayOf(MediaStore.Images.Thumbnails.DATA)
+        val selection = "${MediaStore.Images.Thumbnails.IMAGE_ID} = ? AND ${MediaStore.Images.Thumbnails.KIND} = ?"
+        val selectionArgs = arrayOf(imageId.toString(), KIND_MINI.toString())
+
+        resolver.query(
+            MediaStore.Images.Thumbnails.EXTERNAL_CONTENT_URI,
+            projection,
+            selection,
+            selectionArgs,
+            null,
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val dataIdx = cursor.getColumnIndex(MediaStore.Images.Thumbnails.DATA)
+                val path = if (dataIdx >= 0) cursor.getString(dataIdx) else null
+                if (path != null) {
+                    return BitmapFactory.decodeFile(path)
+                }
+            }
+        }
+        return null
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    /** Serializa un thumb comprimido a JSObject (null se queda como null). */
+    private fun toJSObject(thumb: ImageDecoder.CompressedImage?): JSObject? {
+        if (thumb == null) return null
+        return JSObject().apply {
+            put("data", thumb.data)
+            put("mimeType", thumb.mimeType)
+            put("width", thumb.width)
+            put("height", thumb.height)
+        }
+    }
+
+    private fun respondWith(result: ImageDecoder.CompressedImage?, call: PluginCall) {
+        if (result == null) {
+            call.reject("La imagen original ya no existe en la galería.", EC_MEDIA_NOT_FOUND)
+            return
+        }
+        call.resolve(toJSObject(result))
+    }
+}

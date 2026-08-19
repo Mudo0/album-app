@@ -1,7 +1,9 @@
 # ESCALA
+
+[ ] - Adaptar a desktop para aprovechar la webapp.
 [ ] - Backend para usuarios, suscripcion, pagos,etc.
-[ ] - migrar indexdb a backend -> postgres.
-[ ] - Guardado en la nube
+[ ] - migrar indexdb a backend -> postgres. ???
+[ ] - Guardado en la nube ???
 
 - 1. subir imagen
 - 2. convertir a webp
@@ -10,10 +12,13 @@
 - 5. si hace falta copiar la imagen ir a pedir la original al backend (cloud)
 
 # EXTRAS
+
 - [ ] agregar **about** (acerca de la app, de mi, donar)
 - [ ] agregar pagina de caracteristicas (explicacion de funcionamiento, etc.)
 - [ ] landing para descargar.
+
 # FEATURES A AGREGAR
+
 - [ ] pantalla para seleccionar idioma (ingles/español)
 - [ ] usuarios para manejar suscripciones y pagos
 - [ ] etiquetas para los albumes y stickers
@@ -23,8 +28,8 @@
 - [ ] themes (posible monetizacion)
 - [ ] agregar lightbox de los stickers (ver mas de cerca)
 
-
 ## Edicion de stickers
+
 - [ ] bloquear el movimiento de stickers
 - [ ] añadir limite preciso (bordes) de stickers png
 - [ ] cambiar tamaño
@@ -34,12 +39,12 @@
 
 ## Optimizacion
 
-- [ ] adaptar a offline
+- [x] adaptar a offline
 - [ ] agregar cache
 - [ ] agregar preview webp de sticker // para verla mas de cerca
-- [ ] agregar thumbnail webp de sticker // para el album
-- [ ] cargado de stickers parejos (todos al mismo tiempo)
-- [ ] al agregar muchas imagenes se empieza a laguear (posible problema de memoria)
+- [x] agregar thumbnail webp de sticker // para el album
+- [x] cargado de stickers parejos (todos al mismo tiempo)
+- [x] al agregar muchas imagenes se empieza a laguear (posible problema de memoria)
 
 # bugs para corregir
 
@@ -47,7 +52,8 @@
 - [ ] guardado del album al cerrar repentinamente, onDestroy y guardar pocas veces, no con cada drag-drop (utilizar debounce).
 - [ ] al cancelar el drag con esc, volver, cerrar la pestaña se puede bugear.
 - [ ] al cambiar de resolucion algunos stickers se pueden quedar fuera del limite de la pantalla pero existiendo dentro del album.
+
 # Testing
 
-- [ ] agregar tests para prevenir errores de navegacion
+- [x] agregar tests para prevenir errores de navegacion
 - [ ] agregar tests e2e que simulen el flujo de creacion/edicion de albumes y stickers.

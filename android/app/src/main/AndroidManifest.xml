@@ -38,4 +38,11 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Galería (GalleryPlugin): Android 13+ usa READ_MEDIA_IMAGES, versiones
+         anteriores READ_EXTERNAL_STORAGE (deprecado en 13+, se limita con maxSdk) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 </manifest>

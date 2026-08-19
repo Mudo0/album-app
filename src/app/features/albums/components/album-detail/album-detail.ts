@@ -19,13 +19,14 @@ import { AlbumService } from '../../services/album.service';
 import { BackButton } from '../../../../shared/components/back-button/back-button';
 import { ImageService } from '../../../images/services/image.service';
 import { StickerImage } from '../../../../core/models/stickerImage.viewModel';
+import { LongPressDirective } from '../../../../shared/directives/long-press';
 
 
 
 @Component({
   selector: 'app-album-detail',
   standalone: true,
-  imports: [RouterLink, BackButton, DragDropModule],
+  imports: [RouterLink, BackButton, DragDropModule, LongPressDirective],
   templateUrl: './album-detail.html',
   styleUrl: './album-detail.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -41,6 +42,7 @@ export class AlbumDetail implements OnInit, OnDestroy {
   readonly album = signal<Album | undefined>(undefined);
   readonly stickers = signal<StickerImage[]>([]);
   readonly loading = signal(true);
+  readonly toast = signal<string | null>(null);
 
   ngOnInit(): void {
     this.loadData();
@@ -86,10 +88,24 @@ export class AlbumDetail implements OnInit, OnDestroy {
     await this.loadImages(); // recrea stickers y revoca las URLs viejas (incluida la eliminada)
   }
 
+  async copyImage(sticker: StickerImage): Promise<void> {
+    try {
+      await this.imageService.copyToClipboard(sticker);
+      this.showToast('Copiado al portapapeles');
+    } catch {
+      this.showToast('No se pudo copiar');
+    }
+  }
+
   ngOnDestroy(): void {
     for (const sticker of this.stickers()) {
       URL.revokeObjectURL(sticker.objectUrl);
     }
+  }
+
+  private showToast(message: string): void {
+    this.toast.set(message);
+    setTimeout(() => this.toast.set(null), 2000);
   }
 
   private async loadData(): Promise<void> {
@@ -109,7 +125,9 @@ export class AlbumDetail implements OnInit, OnDestroy {
       ...img,
       x: img.position?.x ?? 20 + ((i * 55) % 240),
       y: img.position?.y ?? 20 + ((i * 35) % 560),
-      objectUrl: URL.createObjectURL(new Blob([img.data], { type: img.mimeType })),
+      objectUrl: URL.createObjectURL(
+        new Blob([img.thumbnail], { type: img.thumbnailMime }),
+      ),
     }));
 
     // Revocar las viejas recién acá: durante el await los stickers visibles

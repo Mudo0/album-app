@@ -55,6 +55,8 @@ function restoreVersionSnapshot(originalPkg, originalLock) {
 //   v1.0.0-beta.2     + rc            -> v1.0.0-rc.1
 //   v1.0.0-rc.1       + estable       -> v1.0.0           (publicar: quita sufijo)
 //   v1.0.0 (estable)  + estable+patch -> v1.0.1           (corrección directa)
+//   v1.0.0-beta.1     + alpha+patch   -> v1.0.1-alpha.1   (volver atrás: bump base + reset etapa)
+//   v1.0.0-rc.2       + alpha+minor   -> v1.1.0-alpha.1   (volver atrás: bump base + reset etapa)
 
 function parseFullVersion(version) {
   const m = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-([a-z]+)\.(\d+))?$/);
@@ -114,6 +116,11 @@ function nextVersion(current, stage, releaseType) {
   }
 
   // Cambiar de etapa (alpha -> beta, beta -> rc): resetea el número a 1
+  // Si se provee releaseType (ej: volver de beta a alpha con patch), bump la base
+  if (releaseType) {
+    const bumped = bumpBase(v, releaseType);
+    return { ...bumped, stage, num: 1 };
+  }
   return { major: v.major, minor: v.minor, patch: v.patch, stage, num: 1 };
 }
 
@@ -224,10 +231,9 @@ async function main() {
 
   const stage = await askStage();
 
-  // El tipo de cambio (patch/minor/major) solo se pregunta al publicar ESTABLE
-  // desde una versión estable: es el único caso que cambia la base X.Y.Z.
-  // Alpha/beta/rc nunca tocan X.Y.Z, solo el número de etapa (N+1, reset o
-  // añadir la etapa nueva), así que no se pregunta nada.
+  // El tipo de cambio (patch/minor/major) se pregunta en dos casos:
+  //  1) Publicar ESTABLE desde versión estable: cambia la base X.Y.Z.
+  //  2) Volver a una etapa anterior (ej: beta → alpha): permite bump de la base.
   let releaseType = null;
   if (stage === 'stable') {
     if (currentIsPrerelease) {
@@ -235,6 +241,15 @@ async function main() {
         `\nℹ️  Publicando ${originalVersion} → ${parseFullVersion(originalVersion).major}.${parseFullVersion(originalVersion).minor}.${parseFullVersion(originalVersion).patch} (sin etapa)`,
       );
     } else {
+      releaseType = await askReleaseType(originalVersion);
+    }
+  } else if (currentIsPrerelease) {
+    const currentStageIndex = STAGE_ORDER.indexOf(parseFullVersion(originalVersion).stage);
+    const targetStageIndex = STAGE_ORDER.indexOf(stage);
+    if (targetStageIndex < currentStageIndex) {
+      console.log(
+        `\n⚠️  Volviendo de ${STAGE_LABELS[parseFullVersion(originalVersion).stage]} a ${STAGE_LABELS[stage]}`,
+      );
       releaseType = await askReleaseType(originalVersion);
     }
   }
