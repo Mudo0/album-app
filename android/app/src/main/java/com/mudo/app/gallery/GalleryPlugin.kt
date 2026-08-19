@@ -69,6 +69,9 @@ class GalleryPlugin : Plugin() {
         private const val THUMB_THREADS = 4
         /** Tope de fotos por llamada a getMediaThumbnails (validación defensiva). */
         private const val MAX_BATCH_THUMBS = 50
+        /** Directorio y nombre fijo del archivo temporal del viewer (se sobreescribe). */
+        private const val VIEWER_DIR = "viewer"
+        private const val VIEWER_TEMP_FILE = "viewer_temp.webp"
     }
 
     // Ejecutor SERIAL: páginas de galería, thumbs de guardado y la full se
@@ -290,6 +293,12 @@ class GalleryPlugin : Plugin() {
 
     // ── getMediaFull ────────────────────────────────────────────────────────
 
+    /**
+     * Decodifica la imagen full, la comprime y la escribe a un archivo temporal
+     * en cache dir. Devuelve el file path en vez de base64 — la WebView lo
+     * convierte a URL segura con Capacitor.convertFileSrc() y el <img> streama
+     * del disco a la GPU sin cargar bytes en el heap de JS.
+     */
     @PluginMethod
     fun getMediaFull(call: PluginCall) {
         if (!requirePermission(call)) return
@@ -304,10 +313,27 @@ class GalleryPlugin : Plugin() {
 
         executor.execute {
             try {
-                val result = ImageDecoder.decodeAndCompress(
+                val compressed = ImageDecoder.decodeAndCompressBytes(
                     context.contentResolver, Uri.parse(uri), maxSize, format, quality,
                 )
-                respondWith(result, call)
+                if (compressed == null) {
+                    call.reject("La imagen original ya no existe en la galería.", EC_MEDIA_NOT_FOUND)
+                    return@execute
+                }
+
+                // Escribir a archivo temporal (nombre fijo, se sobreescribe)
+                val viewerDir = java.io.File(context.cacheDir, VIEWER_DIR)
+                viewerDir.mkdirs()
+                val tempFile = java.io.File(viewerDir, VIEWER_TEMP_FILE)
+                tempFile.writeBytes(compressed.bytes)
+
+                val result = JSObject().apply {
+                    put("filePath", tempFile.absolutePath)
+                    put("mimeType", compressed.mimeType)
+                    put("width", compressed.width)
+                    put("height", compressed.height)
+                }
+                call.resolve(result)
             } catch (e: SecurityException) {
                 call.reject("Se necesita permiso para leer la galería.", EC_ACCESS_DENIED)
             } catch (e: Exception) {
