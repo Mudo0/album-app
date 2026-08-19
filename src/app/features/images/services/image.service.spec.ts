@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { ImageService, ALBUM_THUMB_SIZE } from './image.service';
 import { IMAGE_REPOSITORY } from '../../../core/tokens/image-repository.token';
 import { GalleryService } from '../../../core/services/gallery.service';
+import { ClipboardService } from '../../../core/services/clipboard.service';
 import type { GalleryMedia } from '../../../core/interfaces/gallery-plugin.interface';
 import { GalleryError } from '../../../core/services/gallery.service';
 
@@ -24,6 +25,10 @@ describe('ImageService', () => {
     requestPermissions: vi.fn(),
   };
 
+  const clipboard = {
+    copyImageToClipboard: vi.fn(),
+  };
+
   let service: ImageService;
 
   beforeEach(() => {
@@ -33,6 +38,7 @@ describe('ImageService', () => {
       providers: [
         { provide: IMAGE_REPOSITORY, useValue: repo },
         { provide: GalleryService, useValue: gallery },
+        { provide: ClipboardService, useValue: clipboard },
       ],
     });
     service = TestBed.inject(ImageService);
@@ -214,6 +220,55 @@ describe('ImageService', () => {
     } catch (err) {
       expect(err).toBeInstanceOf(GalleryError);
       expect((err as GalleryError).code).toBe('mediaNotFound');
+    }
+  });
+
+  it('should delegate copyToClipboard to the clipboard service with sourceUri', async () => {
+    vi.mocked(clipboard.copyImageToClipboard).mockResolvedValue(undefined);
+
+    const image = {
+      id: 'img1',
+      albumId: 'a1',
+      sourceUri: 'content://media/external/images/media/1',
+      thumbnail: new Blob(['thumb'], { type: 'image/webp' }),
+      thumbnailMime: 'image/webp',
+      filename: 'foto.jpg',
+      mimeType: 'image/jpeg',
+      order: 0,
+      position: { x: 0, y: 0 },
+      createdAt: new Date(),
+    };
+
+    await service.copyToClipboard(image);
+
+    expect(clipboard.copyImageToClipboard).toHaveBeenCalledWith(
+      'content://media/external/images/media/1',
+    );
+  });
+
+  it('should propagate clipboard errors to the caller', async () => {
+    vi.mocked(clipboard.copyImageToClipboard).mockRejectedValue(
+      new Error('No se pudo acceder a la imagen.'),
+    );
+
+    const image = {
+      id: 'img1',
+      albumId: 'a1',
+      sourceUri: 'content://media/external/images/media/1',
+      thumbnail: new Blob(['thumb'], { type: 'image/webp' }),
+      thumbnailMime: 'image/webp',
+      filename: 'foto.jpg',
+      mimeType: 'image/jpeg',
+      order: 0,
+      position: { x: 0, y: 0 },
+      createdAt: new Date(),
+    };
+
+    try {
+      await service.copyToClipboard(image);
+      expect.unreachable();
+    } catch (err) {
+      expect((err as Error).message).toContain('No se pudo acceder');
     }
   });
 });

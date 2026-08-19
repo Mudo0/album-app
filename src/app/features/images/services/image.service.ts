@@ -4,6 +4,7 @@ import { Image } from '../../../core/models/image.model';
 import { IMAGE_REPOSITORY } from '../../../core/tokens/image-repository.token';
 import { Position } from '../../../core/models/position.model';
 import { GalleryService } from '../../../core/services/gallery.service';
+import { ClipboardService } from '../../../core/services/clipboard.service';
 import type { GalleryMedia } from '../../../core/interfaces/gallery-plugin.interface';
 import { base64ToBlob } from '../../../core/utils/base64.util';
 
@@ -14,6 +15,7 @@ export const ALBUM_THUMB_SIZE = 512;
 export class ImageService {
   private readonly imageRepo = inject(IMAGE_REPOSITORY);
   private readonly gallery = inject(GalleryService);
+  private readonly clipboard = inject(ClipboardService);
 
   /**
    * Agrega una foto de la galería como ESPEJO: persiste la sourceUri nativa y
@@ -147,5 +149,14 @@ export class ImageService {
     // Con el espejo no hay archivo propio que borrar: la foto vive en la
     // galería del usuario y acá solo cae la fila (sourceUri + thumbnail).
     await this.imageRepo.delete(id);
+  }
+
+  /**
+   * Copia la imagen original al portapapeles del sistema.
+   * La operación completa ocurre en Kotlin — la WebView solo recibe
+   * success/error. El plugin vibra al completar (feedback háptico).
+   */
+  async copyToClipboard(image: Image): Promise<void> {
+    await this.clipboard.copyImageToClipboard(image.sourceUri);
   }
 }
