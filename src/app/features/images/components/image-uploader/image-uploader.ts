@@ -287,7 +287,7 @@ export class ImageUploader implements OnInit, OnDestroy {
         thumbs.forEach((thumb, j) => {
           const media = chunk[j];
           if (thumb == null || media === undefined) return; // falló: se saltea
-          const blob = base64ToBlob(thumb.data, thumb.mimeType);
+          const blob = base64ToBlob(thumb.data!, thumb.mimeType);
           this.cacheThumb(media.id, URL.createObjectURL(blob));
         });
       }
