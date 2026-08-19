@@ -5,14 +5,11 @@ import android.content.ContentResolver
 import android.content.ContentUris
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Matrix
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import android.util.Base64
 import android.util.Size
-import androidx.exifinterface.media.ExifInterface
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.PermissionState
@@ -22,7 +19,6 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
-import java.io.ByteArrayOutputStream
 import java.io.FileNotFoundException
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
@@ -43,8 +39,10 @@ import java.util.concurrent.Executors
  *  - API 29+: ContentResolver.loadThumbnail(uri, Size, null)
  *  - API 24-28: tabla MediaStore.Images.Thumbnails (MINI_KIND ~512px)
  * Las miniaturas del sistema ya vienen con la orientación EXIF aplicada → NO
- * se rotan. La rotación EXIF manual (ExifInterface + Matrix.postRotate) queda
- * SOLO para getMediaFull, donde BitmapFactory no aplica la orientación.
+ * se rotan.
+ *
+ * La lógica de decodificación y compresión de imágenes está extraída a
+ * [ImageDecoder] — compartida con ClipboardPlugin.
  */
 @CapacitorPlugin(
     name = "Gallery",
@@ -306,7 +304,9 @@ class GalleryPlugin : Plugin() {
 
         executor.execute {
             try {
-                val result = decodeAndCompress(Uri.parse(uri), maxSize, format, quality)
+                val result = ImageDecoder.decodeAndCompress(
+                    context.contentResolver, Uri.parse(uri), maxSize, format, quality,
+                )
                 respondWith(result, call)
             } catch (e: SecurityException) {
                 call.reject("Se necesita permiso para leer la galería.", EC_ACCESS_DENIED)
@@ -332,7 +332,7 @@ class GalleryPlugin : Plugin() {
         size: Int,
         format: String,
         quality: Int,
-    ): List<CompressedImage?> {
+    ): List<ImageDecoder.CompressedImage?> {
         if (items.isEmpty()) return emptyList()
 
         val tasks = items.map { item ->
@@ -362,7 +362,7 @@ class GalleryPlugin : Plugin() {
      * Devuelve null si no existe (URI muerta, galería aún no indexada, etc.).
      * Los thumbs del sistema YA vienen con orientación aplicada: no rotar.
      */
-    private fun loadThumb(uri: Uri, imageId: Long, size: Int, format: String, quality: Int): CompressedImage? {
+    private fun loadThumb(uri: Uri, imageId: Long, size: Int, format: String, quality: Int): ImageDecoder.CompressedImage? {
         val resolver = getContext().contentResolver
         return try {
             val bitmap = if (Build.VERSION.SDK_INT >= API_LEVEL_29) {
@@ -370,7 +370,8 @@ class GalleryPlugin : Plugin() {
             } else {
                 loadLegacySystemThumb(resolver, imageId) ?: return null
             }
-            compressBitmap(bitmap, size, format, quality)
+            // Thumbnails del sistema: ya orientados, solo comprimir
+            ImageDecoder.compressBitmap(bitmap, size, format, quality)
         } catch (e: FileNotFoundException) {
             null
         } catch (e: SecurityException) {
@@ -408,10 +409,10 @@ class GalleryPlugin : Plugin() {
         return null
     }
 
-    // ── decode + compress (la full nunca cruza al JS) ───────────────────────
+    // ── Helpers ─────────────────────────────────────────────────────────────
 
     /** Serializa un thumb comprimido a JSObject (null se queda como null). */
-    private fun toJSObject(thumb: CompressedImage?): JSObject? {
+    private fun toJSObject(thumb: ImageDecoder.CompressedImage?): JSObject? {
         if (thumb == null) return null
         return JSObject().apply {
             put("data", thumb.data)
@@ -421,107 +422,11 @@ class GalleryPlugin : Plugin() {
         }
     }
 
-    private fun respondWith(result: CompressedImage?, call: PluginCall) {
+    private fun respondWith(result: ImageDecoder.CompressedImage?, call: PluginCall) {
         if (result == null) {
             call.reject("La imagen original ya no existe en la galería.", EC_MEDIA_NOT_FOUND)
             return
         }
         call.resolve(toJSObject(result))
-    }
-
-    private data class CompressedImage(
-        val data: String,
-        val mimeType: String,
-        val width: Int,
-        val height: Int,
-    )
-
-    /**
-     * Lee la imagen FULL y la comprime a base64. SOLO para el viewer:
-     * BitmapFactory NO aplica la rotación EXIF, así que acá (y solo acá) se
-     * rota manualmente con Matrix antes de comprimir.
-     */
-    private fun decodeAndCompress(
-        uri: Uri,
-        maxSize: Int,
-        format: String,
-        quality: Int,
-    ): CompressedImage? {
-        val resolver = getContext().contentResolver
-
-        // 1) Bounds sin decodificar pixeles (una foto 4000x3000 = 48MB en RAM si no)
-        val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, boundsOptions)
-        }
-        if (boundsOptions.outWidth <= 0 || boundsOptions.outHeight <= 0) return null
-
-        // 2) Rotación EXIF, desde un stream PROPIO (ExifInterface y decodeStream
-        //    compiten por el mismo InputStream: nunca compartirlo)
-        val orientation = resolver.openInputStream(uri)?.use { stream ->
-            ExifInterface(stream).getAttributeInt(
-                ExifInterface.TAG_ORIENTATION,
-                ExifInterface.ORIENTATION_NORMAL,
-            )
-        } ?: ExifInterface.ORIENTATION_NORMAL
-        val rotateDegrees = when (orientation) {
-            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
-            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-            else -> 0f
-        }
-
-        // 3) Muestreo por potencia de 2 (el decoder lo exige)
-        var inSampleSize = 1
-        val maxSide = maxOf(boundsOptions.outWidth, boundsOptions.outHeight)
-        while (maxSide / (inSampleSize * 2) >= maxSize) inSampleSize *= 2
-
-        val decodeOptions = BitmapFactory.Options().apply { inSampleSize = inSampleSize }
-        var bitmap = resolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, decodeOptions)
-        } ?: return null
-
-        // 4) Rotar manualmente (BitmapFactory no aplica EXIF)
-        if (rotateDegrees != 0f) {
-            val matrix = Matrix().apply { postRotate(rotateDegrees) }
-            val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-            if (rotated !== bitmap) bitmap.recycle()
-            bitmap = rotated
-        }
-
-        // 5) Escala fina + compresión + base64
-        return compressBitmap(bitmap, maxSize, format, quality)
-    }
-
-    /** Escala fina al tamaño pedido, comprime y devuelve base64. Recicla el bitmap. */
-    private fun compressBitmap(source: Bitmap, maxSize: Int, format: String, quality: Int): CompressedImage {
-        var bitmap = source
-
-        val currentMaxSide = maxOf(bitmap.width, bitmap.height)
-        if (currentMaxSide > maxSize) {
-            val scale = maxSize.toFloat() / currentMaxSide
-            val newWidth = (bitmap.width * scale).toInt().coerceAtLeast(1)
-            val newHeight = (bitmap.height * scale).toInt().coerceAtLeast(1)
-            val scaled = Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
-            if (scaled !== bitmap) bitmap.recycle()
-            bitmap = scaled
-        }
-
-        @Suppress("DEPRECATION")
-        val compressFormat = when {
-            format == "webp" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
-                Bitmap.CompressFormat.WEBP_LOSSY
-            format == "webp" -> Bitmap.CompressFormat.WEBP
-            else -> Bitmap.CompressFormat.JPEG
-        }
-        val mimeType = if (format == "webp") "image/webp" else "image/jpeg"
-
-        val output = ByteArrayOutputStream()
-        bitmap.compress(compressFormat, quality, output)
-        bitmap.recycle()
-
-        val bytes = output.toByteArray()
-        val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
-        return CompressedImage(base64, mimeType, bitmap.width, bitmap.height)
     }
 }
