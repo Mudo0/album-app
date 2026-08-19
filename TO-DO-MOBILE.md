@@ -5,6 +5,7 @@
 ### UPDATES
 
 - [ ] updates remotas (ionic appflow ???)
+- [ ] sincronizacion entre dispositivos
 
 ### TESTS
 

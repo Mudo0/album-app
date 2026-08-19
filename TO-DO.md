@@ -1,4 +1,6 @@
 # ESCALA
+
+[ ] - Adaptar a desktop para aprovechar la webapp.
 [ ] - Backend para usuarios, suscripcion, pagos,etc.
 [ ] - migrar indexdb a backend -> postgres. ???
 [ ] - Guardado en la nube ???
@@ -10,10 +12,13 @@
 - 5. si hace falta copiar la imagen ir a pedir la original al backend (cloud)
 
 # EXTRAS
+
 - [ ] agregar **about** (acerca de la app, de mi, donar)
 - [ ] agregar pagina de caracteristicas (explicacion de funcionamiento, etc.)
 - [ ] landing para descargar.
+
 # FEATURES A AGREGAR
+
 - [ ] pantalla para seleccionar idioma (ingles/español)
 - [ ] usuarios para manejar suscripciones y pagos
 - [ ] etiquetas para los albumes y stickers
@@ -23,8 +28,8 @@
 - [ ] themes (posible monetizacion)
 - [ ] agregar lightbox de los stickers (ver mas de cerca)
 
-
 ## Edicion de stickers
+
 - [ ] bloquear el movimiento de stickers
 - [ ] añadir limite preciso (bordes) de stickers png
 - [ ] cambiar tamaño
@@ -47,6 +52,7 @@
 - [ ] guardado del album al cerrar repentinamente, onDestroy y guardar pocas veces, no con cada drag-drop (utilizar debounce).
 - [ ] al cancelar el drag con esc, volver, cerrar la pestaña se puede bugear.
 - [ ] al cambiar de resolucion algunos stickers se pueden quedar fuera del limite de la pantalla pero existiendo dentro del album.
+
 # Testing
 
 - [x] agregar tests para prevenir errores de navegacion
