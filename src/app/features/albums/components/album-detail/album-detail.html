@@ -36,6 +36,8 @@
           [cdkDragFreeDragPosition]="{ x: sticker.x, y: sticker.y }"
           (cdkDragStarted)="onDragStarted(sticker)"
           (cdkDragEnded)="onDragEnded(sticker, $event)"
+          appLongPress
+          (longPress)="copyImage(sticker)"
         >
           <img
             class="sticker-img"
@@ -66,4 +68,8 @@
       <span class="add-icon">+</span>
     </a>
   </footer>
+}
+
+@if (toast()) {
+  <div class="toast">{{ toast() }}</div>
 }

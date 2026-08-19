@@ -1,9 +1,11 @@
 import { Injectable, inject } from '@angular/core';
+import { Capacitor } from '@capacitor/core';
 import { Image } from '../../../core/models/image.model';
 
 import { IMAGE_REPOSITORY } from '../../../core/tokens/image-repository.token';
 import { Position } from '../../../core/models/position.model';
 import { GalleryService } from '../../../core/services/gallery.service';
+import { ClipboardService } from '../../../core/services/clipboard.service';
 import type { GalleryMedia } from '../../../core/interfaces/gallery-plugin.interface';
 import { base64ToBlob } from '../../../core/utils/base64.util';
 
@@ -14,6 +16,7 @@ export const ALBUM_THUMB_SIZE = 512;
 export class ImageService {
   private readonly imageRepo = inject(IMAGE_REPOSITORY);
   private readonly gallery = inject(GalleryService);
+  private readonly clipboard = inject(ClipboardService);
 
   /**
    * Agrega una foto de la galería como ESPEJO: persiste la sourceUri nativa y
@@ -28,7 +31,7 @@ export class ImageService {
 
     // base64 -> Blob y soltamos el string apenas termina (memoria/OOM: el
     // string base64 vive en el heap hasta que el GC lo barra)
-    const thumbnail = base64ToBlob(thumb.data, thumb.mimeType);
+    const thumbnail = base64ToBlob(thumb.data!, thumb.mimeType);
 
     const lastImage = await this.imageRepo.getLastByAlbum(albumId);
 
@@ -97,7 +100,7 @@ export class ImageService {
         id: crypto.randomUUID(),
         albumId,
         sourceUri: media.uri,
-        thumbnail: base64ToBlob(thumb.data, thumb.mimeType),
+        thumbnail: base64ToBlob(thumb.data!, thumb.mimeType),
         thumbnailMime: thumb.mimeType,
         filename: media.name,
         mimeType: media.mimeType,
@@ -117,15 +120,18 @@ export class ImageService {
   }
 
   /**
-   * Resuelve la imagen full para el viewer a través del plugin (redimensionada
-   * y comprimida en Kotlin, la full nunca cruza el puente). Si la URI murió
-   * (foto borrada de la galería), el GalleryService lanza
+   * Resuelve la imagen full para el viewer a través del plugin. El plugin
+   * escribe la imagen comprimida a un archivo temporal en cache dir y
+   * devuelve el file path. La WebView lo convierte con convertFileSrc()
+   * y el <img> streama del disco a la GPU — cero bytes en heap de JS.
+   *
+   * Si la URI murió (foto borrada de la galería), el GalleryService lanza
    * GalleryError(mediaNotFound) — el componente decide si avisar para
    * reubicar o eliminar la imagen.
    */
   async resolveSource(image: Image): Promise<string> {
     const full = await this.gallery.getMediaFull(image.sourceUri);
-    return `data:${full.mimeType};base64,${full.data}`;
+    return Capacitor.convertFileSrc(full.filePath!);
   }
 
   async getLastByAlbum(albumId: string): Promise<Image | undefined> {
@@ -147,5 +153,14 @@ export class ImageService {
     // Con el espejo no hay archivo propio que borrar: la foto vive en la
     // galería del usuario y acá solo cae la fila (sourceUri + thumbnail).
     await this.imageRepo.delete(id);
+  }
+
+  /**
+   * Copia la imagen original al portapapeles del sistema.
+   * La operación completa ocurre en Kotlin — la WebView solo recibe
+   * success/error. El plugin vibra al completar (feedback háptico).
+   */
+  async copyToClipboard(image: Image): Promise<void> {
+    await this.clipboard.copyImageToClipboard(image.sourceUri);
   }
 }

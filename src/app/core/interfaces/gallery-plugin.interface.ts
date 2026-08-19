@@ -1,37 +1,15 @@
-import type { PermissionState } from '@capacitor/core';
+import type { GalleryMedia } from '../models/gallery-media.model';
+import type { MediaResult } from '../models/media-result.model';
+import type { MediaPermissions } from '../models/media-permissions.model';
 
-/**
- * Item de la galería nativa tal como lo devuelve GalleryPlugin.getGallery.
- * SOLO metadatos: el picker pide los thumbnails bajo demanda con
- * getMediaThumbnails (ventana visible + cache LRU), nunca vienen acá.
- */
-export interface GalleryMedia {
-  id: string;
-  uri: string;
-  name: string;
-  mimeType: string;
-  width: number;
-  height: number;
-  dateAdded: number;
-}
+// Re-exports: consumidores existentes pueden seguir importando desde acá
+export type { GalleryMedia } from '../models/gallery-media.model';
+export type { MediaResult } from '../models/media-result.model';
+export type { MediaPermissions } from '../models/media-permissions.model';
 
 export interface GalleryResponse {
   medias: GalleryMedia[];
   hasMore: boolean;
-}
-
-/** Resultado de una lectura/compresión nativa (nunca la full original). */
-export interface MediaResult {
-  /** base64 del archivo ya redimensionado y comprimido en Kotlin. */
-  data: string;
-  mimeType: string;
-  width: number;
-  height: number;
-}
-
-export interface MediaPermissions {
-  mediaLibrary: PermissionState;
-  storageLegacy: PermissionState;
 }
 
 export interface GalleryPluginInterface {
