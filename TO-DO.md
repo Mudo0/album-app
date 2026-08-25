@@ -1,6 +1,14 @@
 # ESCALA
 
 [ ] - Adaptar a desktop para aprovechar la webapp.
+Flujo de Sincronización por QR (App Desktop <-> App Android)
+
+    Host (Desktop): Tu contenedor en Java o C# inicia un servidor WebSocket en segundo plano e imprime en la vista de Angular un código QR con su IP local, puerto y un token temporal.
+
+    Cliente (Celular): El usuario abre la app de Capacitor en Android, escanea el QR con la cámara y extrae las credenciales.
+
+    Conexión Directa: El celular se conecta al socket de la PC. A partir de este momento, ambas aplicaciones se envían peticiones bidireccionales en la red WiFi para intercambiar las imágenes y los metadatos.
+
 [ ] - Backend para usuarios, suscripcion, pagos,etc.
 [ ] - migrar indexdb a backend -> postgres. ???
 [ ] - Guardado en la nube ???
