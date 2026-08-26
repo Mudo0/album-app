@@ -103,8 +103,17 @@ export class AlbumDetail implements OnInit, OnDestroy {
     this.isDragging = false;
 
     const { x: dx, y: dy } = event.distance;
-    const x = sticker.x + dx;
-    const y = sticker.y + dy;
+    let x = sticker.x + dx;
+    let y = sticker.y + dy;
+
+    // Clamp para que el sticker no se salga del canvas
+    const canvas = this.hostEl.nativeElement.querySelector('.canvas');
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const stickerWidth = 120;
+      x = Math.max(0, Math.min(x, rect.width - stickerWidth));
+      y = Math.max(0, Math.min(y, rect.height - stickerWidth));
+    }
 
     this.stickers.update((current) =>
       current.map((s) => (s.id === sticker.id ? { ...s, x, y } : s)),
