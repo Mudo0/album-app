@@ -56,11 +56,11 @@ Flujo de Sincronización por QR (App Desktop <-> App Android)
 
 # bugs para corregir
 
-- [ ] al eliminar una imagen y tocar otra, la ultima se mueve sola hacia la esquina superior izquierda.
+- [x] al eliminar una imagen y tocar otra, la ultima se mueve sola hacia la esquina superior izquierda.
 - [ ] guardado del album al cerrar repentinamente, onDestroy y guardar pocas veces, no con cada drag-drop (utilizar debounce).
 - [ ] al cancelar el drag con esc, volver, cerrar la pestaña se puede bugear.
 - [ ] al cambiar de resolucion algunos stickers se pueden quedar fuera del limite de la pantalla pero existiendo dentro del album.
-
+- [ ] limitar posicion de sticker al margen de la pantalla
 # Testing
 
 - [x] agregar tests para prevenir errores de navegacion
