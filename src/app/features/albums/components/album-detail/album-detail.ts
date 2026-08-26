@@ -20,7 +20,7 @@ import { AlbumService } from '../../services/album.service';
 
 import { BackButton } from '../../../../shared/components/back-button/back-button';
 import { ImageService } from '../../../images/services/image.service';
-import { StickerImage } from '../../../../core/models/stickerImage.viewModel';
+import { StickerImage, StickerBounds } from '../../../../core/models/stickerImage.viewModel';
 import { LongPressDirective, LongPressPosition } from '../../../../shared/directives/long-press';
 
 
@@ -80,6 +80,7 @@ export class AlbumDetail implements OnInit, OnDestroy {
    */
   onDragStarted(sticker: StickerImage, event: CdkDragStart): void {
     this.isDragging = true;
+    this.closeContextMenu();
     this.maxZIndex++;
     this.renderer.setStyle(
       event.source.element.nativeElement,
@@ -133,19 +134,67 @@ export class AlbumDetail implements OnInit, OnDestroy {
 
   // ── Context menu ──
 
-  openContextMenu(sticker: StickerImage, position: LongPressPosition): void {
+  /**
+   * Devuelve la posición y tamaño de un sticker relativo al canvas.
+   * Útil para posicionar menús, tooltips, o cualquier overlay
+   * que deba alinearse con el sticker.
+   */
+  getStickerBounds(stickerId: string): StickerBounds | null {
+    const canvas = this.hostEl.nativeElement.querySelector('.canvas');
+    const stickerEl = this.hostEl.nativeElement.querySelector(
+      `.sticker[data-sticker-id="${stickerId}"]`,
+    );
+    if (!canvas || !stickerEl) return null;
+
+    const canvasRect = canvas.getBoundingClientRect();
+    const stickerRect = stickerEl.getBoundingClientRect();
+
+    return {
+      x: stickerRect.left - canvasRect.left,
+      y: stickerRect.top - canvasRect.top,
+      width: stickerRect.width,
+      height: stickerRect.height,
+    };
+  }
+
+  openContextMenu(sticker: StickerImage, _position: LongPressPosition): void {
     this.closeContextMenu();
     this.menuSticker.set(sticker);
 
-    // Posicionar a la derecha del toque; si no entra, a la izquierda
-    const menuWidth = 48;
-    const gap = 8;
-    const x =
-      position.x + menuWidth + gap <= window.innerWidth
-        ? position.x + gap
-        : position.x - menuWidth - gap;
-    // Centrar verticalmente, pero sin salir de la pantalla
-    const y = Math.max(0, position.y - menuWidth / 2);
+    const bounds = this.getStickerBounds(sticker.id);
+    const menuWidth = 90;  // 2 botones (40px c/u) + gap + padding
+    const menuHeight = 48; // 1 botón (40px) + padding
+    const gap = 6;
+
+    let x = 0;
+    let y = 0;
+
+    if (bounds) {
+      const canvas = this.hostEl.nativeElement.querySelector('.canvas');
+      if (canvas) {
+        const canvasRect = canvas.getBoundingClientRect();
+        const canvasHeight = canvasRect.height;
+        const canvasWidth = canvasRect.width;
+
+        // Centrado horizontalmente sobre el sticker
+        x = canvasRect.left + bounds.x + (bounds.width - menuWidth) / 2;
+        // Debajo del sticker
+        y = canvasRect.top + bounds.y + bounds.height + gap;
+
+        // Si no entra abajo, arriba del sticker
+        if (y + menuHeight > canvasRect.bottom) {
+          y = canvasRect.top + bounds.y - menuHeight - gap;
+        }
+        // Clamp horizontal dentro del canvas
+        x = Math.max(canvasRect.left, Math.min(x, canvasRect.right - menuWidth));
+        // Clamp vertical dentro del canvas
+        y = Math.max(canvasRect.top, y);
+      }
+    } else {
+      // Fallback: posición original si no se encuentra el sticker
+      x = Math.max(0, Math.min(_position.x - menuWidth / 2, window.innerWidth - menuWidth));
+      y = Math.max(0, _position.y - menuHeight / 2);
+    }
 
     this.menuPosition.set({ x, y });
     this.menuVisible.set(true);
