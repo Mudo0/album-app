@@ -1,27 +1,41 @@
 import { Directive, ElementRef, inject, input, output, OnDestroy } from '@angular/core';
 
+/** Coordenadas del toque/click que disparó el long-press. */
+export interface LongPressPosition {
+  x: number;
+  y: number;
+}
+
 /**
- * Directive de long-press para touch devices.
+ * Directive de long-press multiplatform (touch + mouse).
  *
- * Detecta un toque prolongado (500ms) en el elemento host. Si el usuario
- * mueve el dedo más de 10px (scroll), se cancela — evita falsos positivos
- * al navegar por el álbum.
+ * Detecta un toque prolongado (500ms) en el elemento host.
+ * - Touch: cancela si el dedo se mueve más de 10px (distingue scroll de long-press).
+ * - Mouse: cancela si el cursor se mueve más de 10px del punto inicial.
  *
  * Durante el long-press agrega la clase CSS `long-pressing` al host para
  * permitir indicadores visuales (anillo, escala, etc.).
  *
  * Uso:
  * ```html
- * <div appLongPress (longPress)="onCopy(sticker)">
+ * <div appLongPress (longPress)="onMenu($event)">
  * ```
  */
 @Directive({
   selector: '[appLongPress]',
   host: {
-    '(touchstart)': 'onTouchStart($event)',
-    '(touchend)': 'onTouchEnd()',
-    '(touchmove)': 'onTouchMove($event)',
+    // Touch
+    '(touchstart)': 'onStart($event)',
+    '(touchend)': 'onEnd()',
+    '(touchmove)': 'onMove($event)',
     '(touchcancel)': 'onCancel()',
+    // Mouse
+    '(mousedown)': 'onStart($event)',
+    '(mouseup)': 'onEnd()',
+    '(mousemove)': 'onMove($event)',
+    '(mouseleave)': 'onCancel()',
+    // Bloquear context menu del browser en desktop
+    '(contextmenu)': 'onContextMenu($event)',
   },
 })
 export class LongPressDirective implements OnDestroy {
@@ -30,43 +44,45 @@ export class LongPressDirective implements OnDestroy {
   /** Delay en ms antes de disparar el long-press. */
   readonly delay = input(500);
 
-  /** Umbral de movimiento en px para cancelar (distingue scroll de long-press). */
+  /** Umbral de movimiento en px para cancelar. */
   readonly moveThreshold = input(10);
 
   /** Evento emitido cuando el long-press se completa exitosamente. */
-  readonly longPress = output<void>();
+  readonly longPress = output<LongPressPosition>();
 
   private timer: ReturnType<typeof setTimeout> | null = null;
   private startX = 0;
   private startY = 0;
 
-  onTouchStart(event: TouchEvent): void {
+  // ── Unified handlers ──
+
+  onStart(event: TouchEvent | MouseEvent): void {
     this.cancel();
-    const touch = event.touches[0];
-    this.startX = touch.clientX;
-    this.startY = touch.clientY;
+    const pos = this.getPosition(event);
+    this.startX = pos.x;
+    this.startY = pos.y;
 
     this.timer = setTimeout(() => {
       this.timer = null;
       this.el.nativeElement.classList.add('long-pressing');
-      this.longPress.emit();
+      this.longPress.emit({ x: this.startX, y: this.startY });
       // Quitar la clase después de un tick para que el componente
       // pueda reaccionar al feedback visual
       setTimeout(() => this.el.nativeElement.classList.remove('long-pressing'), 300);
     }, this.delay());
   }
 
-  onTouchMove(event: TouchEvent): void {
+  onMove(event: TouchEvent | MouseEvent): void {
     if (!this.timer) return;
-    const touch = event.touches[0];
-    const dx = Math.abs(touch.clientX - this.startX);
-    const dy = Math.abs(touch.clientY - this.startY);
+    const pos = this.getPosition(event);
+    const dx = Math.abs(pos.x - this.startX);
+    const dy = Math.abs(pos.y - this.startY);
     if (dx > this.moveThreshold() || dy > this.moveThreshold()) {
       this.cancel();
     }
   }
 
-  onTouchEnd(): void {
+  onEnd(): void {
     this.cancel();
   }
 
@@ -74,8 +90,25 @@ export class LongPressDirective implements OnDestroy {
     this.cancel();
   }
 
+  /** Prevenir que aparezca el context menu del browser al hacer long-press con mouse. */
+  onContextMenu(event: Event): void {
+    if (this.timer !== null) {
+      event.preventDefault();
+    }
+  }
+
   ngOnDestroy(): void {
     this.cancel();
+  }
+
+  // ── Private ──
+
+  private getPosition(event: TouchEvent | MouseEvent): LongPressPosition {
+    if ('touches' in event) {
+      const touch = event.touches[0];
+      return { x: touch.clientX, y: touch.clientY };
+    }
+    return { x: event.clientX, y: event.clientY };
   }
 
   private cancel(): void {

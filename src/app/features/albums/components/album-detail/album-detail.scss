@@ -150,29 +150,6 @@
   pointer-events: none;
 }
 
-.sticker-delete {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-  font-size: 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
-.sticker-delete:active {
-  background: rgba(220, 38, 38, 0.85);
-}
-
 /* ---- Footer ---- */
 
 .footer {
@@ -210,6 +187,58 @@
   outline: 3px solid #4f46e5;
   outline-offset: 2px;
   transform: scale(1.04);
+}
+
+/* ---- Context menu ---- */
+
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #1a1a2e;
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  animation: menu-in 0.15s ease-out;
+}
+
+.context-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
+}
+
+.context-menu-btn:active {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.context-menu-btn--danger {
+  color: #f87171;
+}
+
+.context-menu-btn--danger:active {
+  background: rgba(248, 113, 113, 0.15);
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* ---- Toast ---- */

@@ -37,7 +37,7 @@
           (cdkDragStarted)="onDragStarted(sticker)"
           (cdkDragEnded)="onDragEnded(sticker, $event)"
           appLongPress
-          (longPress)="copyImage(sticker)"
+          (longPress)="openContextMenu(sticker, $event)"
         >
           <img
             class="sticker-img"
@@ -45,13 +45,6 @@
             [alt]="sticker.filename"
             draggable="false"
           />
-          <button
-            class="sticker-delete"
-            (click)="deleteImage(sticker.id, $event)"
-            aria-label="Eliminar imagen"
-          >
-            ✕
-          </button>
         </div>
       }
     </div>
@@ -72,4 +65,28 @@
 
 @if (toast()) {
   <div class="toast">{{ toast() }}</div>
+}
+
+@if (menuVisible()) {
+  <nav
+    class="context-menu"
+    [style.left.px]="menuPosition().x"
+    [style.top.px]="menuPosition().y"
+    (pointerdown)="$event.stopPropagation()"
+  >
+    <button class="context-menu-btn" (click)="onMenuCopy()" aria-label="Copiar">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+      </svg>
+    </button>
+    <button class="context-menu-btn context-menu-btn--danger" (click)="onMenuDelete()" aria-label="Eliminar">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        <line x1="10" y1="11" x2="10" y2="17"/>
+        <line x1="14" y1="11" x2="14" y2="17"/>
+      </svg>
+    </button>
+  </nav>
 }

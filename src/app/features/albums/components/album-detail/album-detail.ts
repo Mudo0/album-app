@@ -1,5 +1,6 @@
 import {
   Component,
+  ElementRef,
   inject,
   input,
   signal,
@@ -7,6 +8,7 @@ import {
   OnDestroy,
   ChangeDetectionStrategy,
   DestroyRef,
+  Renderer2,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink, Router, NavigationEnd } from '@angular/router';
@@ -19,7 +21,7 @@ import { AlbumService } from '../../services/album.service';
 import { BackButton } from '../../../../shared/components/back-button/back-button';
 import { ImageService } from '../../../images/services/image.service';
 import { StickerImage } from '../../../../core/models/stickerImage.viewModel';
-import { LongPressDirective } from '../../../../shared/directives/long-press';
+import { LongPressDirective, LongPressPosition } from '../../../../shared/directives/long-press';
 
 
 
@@ -36,6 +38,11 @@ export class AlbumDetail implements OnInit, OnDestroy {
   private readonly imageService = inject(ImageService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly renderer = inject(Renderer2);
+  private readonly hostEl = inject(ElementRef<HTMLElement>);
+
+  /** Listener global para cerrar el menú al tocar fuera. */
+  private documentClickUnlisten: (() => void) | null = null;
 
   readonly id = input.required<string>();
 
@@ -43,6 +50,11 @@ export class AlbumDetail implements OnInit, OnDestroy {
   readonly stickers = signal<StickerImage[]>([]);
   readonly loading = signal(true);
   readonly toast = signal<string | null>(null);
+
+  // ── Context menu state ──
+  readonly menuVisible = signal(false);
+  readonly menuSticker = signal<StickerImage | null>(null);
+  readonly menuPosition = signal<{ x: number; y: number }>({ x: 0, y: 0 });
 
   ngOnInit(): void {
     this.loadData();
@@ -79,16 +91,57 @@ export class AlbumDetail implements OnInit, OnDestroy {
     );
   }
 
-  async deleteImage(imageId: string, event: Event): Promise<void> {
-    event.stopPropagation();
-    event.preventDefault();
+  async deleteImage(imageId: string): Promise<void> {
     if (!confirm('¿Eliminar esta imagen?')) return;
 
     await this.imageService.remove(imageId);
-    await this.loadImages(); // recrea stickers y revoca las URLs viejas (incluida la eliminada)
+    await this.loadImages();
   }
 
-  async copyImage(sticker: StickerImage): Promise<void> {
+  // ── Context menu ──
+
+  openContextMenu(sticker: StickerImage, position: LongPressPosition): void {
+    this.closeContextMenu();
+    this.menuSticker.set(sticker);
+
+    // Posicionar a la derecha del toque; si no entra, a la izquierda
+    const menuWidth = 48;
+    const gap = 8;
+    const x =
+      position.x + menuWidth + gap <= window.innerWidth
+        ? position.x + gap
+        : position.x - menuWidth - gap;
+    // Centrar verticalmente, pero sin salir de la pantalla
+    const y = Math.max(0, position.y - menuWidth / 2);
+
+    this.menuPosition.set({ x, y });
+    this.menuVisible.set(true);
+
+    // Cerrar al tocar fuera del menú
+    this.documentClickUnlisten = this.renderer.listen(
+      'document',
+      'pointerdown',
+      (event: PointerEvent) => {
+        const menuEl = this.hostEl.nativeElement.querySelector('.context-menu');
+        if (menuEl && !menuEl.contains(event.target as Node)) {
+          this.closeContextMenu();
+        }
+      },
+    );
+  }
+
+  closeContextMenu(): void {
+    this.menuVisible.set(false);
+    this.menuSticker.set(null);
+    this.documentClickUnlisten?.();
+    this.documentClickUnlisten = null;
+  }
+
+  async onMenuCopy(): Promise<void> {
+    const sticker = this.menuSticker();
+    this.closeContextMenu();
+    if (!sticker) return;
+
     try {
       await this.imageService.copyToClipboard(sticker);
       this.showToast('Copiado al portapapeles');
@@ -97,7 +150,16 @@ export class AlbumDetail implements OnInit, OnDestroy {
     }
   }
 
+  async onMenuDelete(): Promise<void> {
+    const sticker = this.menuSticker();
+    this.closeContextMenu();
+    if (!sticker) return;
+
+    await this.deleteImage(sticker.id);
+  }
+
   ngOnDestroy(): void {
+    this.documentClickUnlisten?.();
     for (const sticker of this.stickers()) {
       URL.revokeObjectURL(sticker.objectUrl);
     }
