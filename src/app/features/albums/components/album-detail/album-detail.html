@@ -34,9 +34,10 @@
           cdkDrag
           cdkDragBoundary=".canvas"
           [cdkDragFreeDragPosition]="{ x: sticker.x, y: sticker.y }"
-          (cdkDragStarted)="onDragStarted(sticker)"
+          (cdkDragStarted)="onDragStarted(sticker, $event)"
           (cdkDragEnded)="onDragEnded(sticker, $event)"
           appLongPress
+          [appLongPressDisabled]="isDragging"
           (longPress)="openContextMenu(sticker, $event)"
         >
           <img

@@ -47,6 +47,9 @@ export class LongPressDirective implements OnDestroy {
   /** Umbral de movimiento en px para cancelar. */
   readonly moveThreshold = input(10);
 
+  /** Deshabilitar long-press (ej: cuando CDK drag está activo). */
+  readonly disabled = input(false, { alias: 'appLongPressDisabled' });
+
   /** Evento emitido cuando el long-press se completa exitosamente. */
   readonly longPress = output<LongPressPosition>();
 
@@ -58,12 +61,16 @@ export class LongPressDirective implements OnDestroy {
 
   onStart(event: TouchEvent | MouseEvent): void {
     this.cancel();
+    if (this.disabled()) return;
+
     const pos = this.getPosition(event);
     this.startX = pos.x;
     this.startY = pos.y;
 
     this.timer = setTimeout(() => {
       this.timer = null;
+      // Re-verificar: si el drag arrancó mientras esperábamos, no disparar
+      if (this.disabled()) return;
       this.el.nativeElement.classList.add('long-pressing');
       this.longPress.emit({ x: this.startX, y: this.startY });
       // Quitar la clase después de un tick para que el componente

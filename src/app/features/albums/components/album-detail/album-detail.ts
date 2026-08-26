@@ -44,12 +44,18 @@ export class AlbumDetail implements OnInit, OnDestroy {
   /** Listener global para cerrar el menú al tocar fuera. */
   private documentClickUnlisten: (() => void) | null = null;
 
+  /** Contador para z-index ascendente al hacer drag. */
+  private maxZIndex = 0;
+
   readonly id = input.required<string>();
 
   readonly album = signal<Album | undefined>(undefined);
   readonly stickers = signal<StickerImage[]>([]);
   readonly loading = signal(true);
   readonly toast = signal<string | null>(null);
+  /** Plain variable (NOT signal) — writing a signal during drag triggers CD,
+   *  which re-evaluates cdkDragFreeDragPosition bindings mid-drag. */
+  isDragging = false;
 
   // ── Context menu state ──
   readonly menuVisible = signal(false);
@@ -67,24 +73,42 @@ export class AlbumDetail implements OnInit, OnDestroy {
       .subscribe(() => this.loadImages());
   }
 
-  onDragStarted(sticker: StickerImage): void {
-    // Mover al final del array: sin z-index, el apilamiento lo define el
-    // orden del DOM (último hermano = arriba), y @for lo mantiene sync con el array
-    this.stickers.update((current) => {
-      const rest = current.filter((s) => s.id !== sticker.id);
-      return [...rest, sticker];
-    });
+  /**
+   * Drag iniciado: solo setea z-index vía Renderer2 (sin signals = sin CD).
+   * NO reordena el array stickers() acá, porque triggers CD durante drag
+   * y CDK's setFreeDragPosition() resetea _activeTransform a {0,0}.
+   */
+  onDragStarted(sticker: StickerImage, event: CdkDragStart): void {
+    this.isDragging = true;
+    this.maxZIndex++;
+    this.renderer.setStyle(
+      event.source.element.nativeElement,
+      'z-index',
+      this.maxZIndex,
+    );
   }
 
+  /**
+   * Drag finalizado: usa event.distance (delta REAL del mouse) en vez de
+   * getFreeDragPosition(), porque para micro-drags CDK retorna {0,0}.
+   *
+   * _activeTransform se inicializa en {0,0} por setFreeDragPosition().
+   * Solo se computa correctamente en _pointerMove línea 928+.
+   * Para micro-drags, el _pointerMove que arranca el drag retorna en
+   * línea 915 SIN calcular el transform, y _pointerUp viene después.
+   * Resultado: _activeTransform queda en {0,0} y getFreeDragPosition()
+   * retorna {0,0}.
+   */
   onDragEnded(sticker: StickerImage, event: CdkDragEnd): void {
-    const { x, y } = event.source.getFreeDragPosition();
-    // Actualización inmutable: nueva referencia => el signal notifica el CD
+    this.isDragging = false;
+
+    const { x: dx, y: dy } = event.distance;
+    const x = sticker.x + dx;
+    const y = sticker.y + dy;
+
     this.stickers.update((current) =>
       current.map((s) => (s.id === sticker.id ? { ...s, x, y } : s)),
     );
-    // El orden del array ES el z-order: persistir la secuencia completa
-    // (índice → order) para que el apilamiento sobreviva a la recarga.
-    // Reasignar todos evita órdenes duplicados => sortBy estable
     this.imageService.updatePosition(sticker.id, { x, y });
     this.imageService.updateOrder(
       this.stickers().map((s, i) => ({ id: s.id, order: i })),
