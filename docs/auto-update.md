@@ -74,10 +74,10 @@ La app elige el asset según la etapa del **release remoto elegido** (no del loc
 | **D3** | Plugin nativo Kotlin `UpdatePlugin` (descarga + instalación). Patrón: `ClipboardPlugin.kt` existente | El WebView no puede lanzar intents de Android. El plugin ya vive en `android/app/src/main/java/com/mudo/app/` y se registra a mano en `MainActivity`. |
 | **D4** | Descarga con `DownloadManager` nativo a `getExternalFilesDir`, **completa → recién ahí instalar**. La descarga sobrevive si matás la app | `DownloadManager` corre en el sistema, no en la WebView. Al reabrir, el plugin consulta descargas pendientes/completadas (`resumePending`) y ofrece instalar. |
 | **D5** | Instalación: `FileProvider.getUriForFile` + `ACTION_VIEW` + `application/vnd.android.package-archive`, con chequeo previo de `canRequestPackageInstalls()` | Sin ese chequeo, Android 8+ tira `SecurityException` (crashea — justo lo que el AC evita). Si falta, se lanza `ACTION_MANAGE_UNKNOWN_APP_SOURCES`. |
-| **D6** | **Re-check al volver a primer plano** (`visibilitychange`). Sin throttle estricto — un request por `resume` es inofensivo (GitHub: 60 req/h). "Más tarde" silencia el diálogo de update por 24h (no el check en sí). Caché en `localStorage` solo para mostrar la UI sin parpadeo de "verificando..." en cold start. | Para el caso de uso dev (probando en celular): el usuario compila en PC → push → workflow publica APK → vuelve a la app en el celular → `visibilitychange` dispara check → detecta nueva versión → diálogo. Un request por `resume` no se acerca al rate-limit. |
+| **D6** | **Re-check al volver a primer plano** — doble gatillo: `document.visibilitychange` (cuando `visibilityState === 'visible'`) **+** `App.addListener('appStateChange', ...)` de Capacitor (evento nativo de ciclo de vida de la app). Sin throttle estricto — un request por `resume` es inofensivo (GitHub: 60 req/h). "Más tarde" silencia el diálogo de update por 24h (no el check en sí). Caché en `localStorage` solo para mostrar la UI sin parpadeo de "verificando..." en cold start. | Para el caso de uso dev (probando en celular): el usuario compila en PC → push → workflow publica APK → vuelve a la app en el celular → re-check dispara → detecta nueva versión → diálogo. Un request por `resume` no se acerca al rate-limit. **Por qué los dos gatillos**: `visibilitychange` solo por sí solo es frágil en WebView/Chrome Custom Tab — a veces no se dispara confiablemente al volver de background (depende del ciclo de vida del WebView, y Android 10+ puede matar el proceso del WebView sin aviso). `appStateChange` de Capacitor es el canal nativo y confiable de "app volvió a primer plano". Ambos mandan al MISMO `check()` (idempotente vía caché), así que no hay doble request. |
 | **D7** | Capa de bridge abstraída: `NativeUpdateBridge` (interfaz) + `CapacitorUpdateBridge` (adapter) vía provider (patrón `album-repository.provider`) | Para que el core no se acople a Capacitor y el día de mañana el backend sea Tauri sin tocar la lógica. |
 | **D8** | No-op en web/desktop: el checker valida `Capacitor.getPlatform() === 'android'` antes de cualquier llamado | PWA/desktop no tienen instalador. Futuro: Tauri. |
-| **D9** | Auto-check en bootstrap (**fire-and-forget**) + re-check silencioso en cada `visibilitychange` (app vuelve de background) | El bootstrap dispara el primer check sin bloquear el render. Al volver de background, se re-ejecuta (un solo request). Para dev: detecta la nueva versión al reabrir la app. Para release: cubre cold starts y re-opens sin spamear. |
+| **D9** | Auto-check en bootstrap (**fire-and-forget**) + re-check silencioso al volver de background, con doble gatillo (`visibilitychange` **+** `appStateChange` de Capacitor — ver D6) | El bootstrap dispara el primer check sin bloquear el render. Al volver de background, se re-ejecuta (un solo request real; ambos gatillos son idempotentes entre sí). Para dev: detecta la nueva versión al reabrir la app. Para release: cubre cold starts y re-opens sin spamear. |
 
 **Limitación conocida**: `per_page=100` evalúa hasta 100 releases. Para un repo personal alcanza (el último estable estará en el pool salvo que publiques 100 prereleases seguidas sin estabilizar — aceptado).
 
@@ -122,9 +122,9 @@ Extiende `Plugin()` siguiendo el patrón de `ClipboardPlugin.kt` (executor propi
 **Métodos JS**:
 | Método | Params | Comportamiento |
 |---|---|---|
-| `download` | `url`, `fileName` | `DownloadManager` → `setDestinationInExternalFilesDir(context, null, fileName)`. Borra un archivo previo con el mismo nombre. Guarda `downloadId` en `SharedPreferences` (sobrevive al cierre). Resuelve con `{ downloadId }`. Arranca polling de progreso (bytes/total) → `notifyListeners("download-progress")`. |
+| `download` | `url`, `fileName` | `DownloadManager` → `setDestinationInExternalFilesDir(context, null, fileName)`. Borra un archivo previo con el mismo nombre. Guarda `downloadId` en `SharedPreferences` (sobrevive al cierre) — **sobreescribiendo cualquier id previo (se conserva 1 solo id vigente)**. Resuelve con `{ downloadId }`. Arranca polling de progreso (bytes/total) → `notifyListeners("download-progress")`. |
 | `install` | `downloadId` (o `fileName`) | Verifica `canRequestPackageInstalls()`. Si false → lanza `ACTION_MANAGE_UNKNOWN_APP_SOURCES` y rejecta con `{ unknownSourcesRequired: true }`. Si true → `FileProvider.getUriForFile(context, "${packageName}.fileprovider", apkFile)` → `ACTION_VIEW` + `setDataAndType(uri, "application/vnd.android.package-archive")` + `FLAG_GRANT_READ_URI_PERMISSION` + `FLAG_ACTIVITY_NEW_TASK`. |
-| `resumePending` | — | Consulta `DownloadManager` por los `downloadId`s guardados: si `STATUS_SUCCESSFUL` → emite `download-complete` con `{ fileName }`; si `STATUS_RUNNING` → emite `download-progress`; si `STATUS_FAILED` → emite `download-error` y limpia. |
+| `resumePending` | — | Consulta `DownloadManager` por el `downloadId` guardado (un solo id vigente — se limpia del `SharedPreferences` al completar/instalar/fallar): si `STATUS_SUCCESSFUL` → emite `download-complete` con `{ fileName }`; si `STATUS_RUNNING` → emite `download-progress`; si `STATUS_FAILED` o el id ya no existe (query devuelve vacío, p.ej. limpieza del sistema) → emite `download-error` y limpia el id guardado. **No acumular ids huérfanos**: solo hay un `downloadId` en `SharedPreferences` a la vez.
 
 **Eventos emitidos** (`notifyListeners`): `download-progress` `{ bytes, total }`, `download-complete` `{ fileName }`, `download-error` `{ message }`.
 
@@ -174,9 +174,9 @@ registerPlugin(UpdatePlugin.class);
 - `check(force = false)`: si `Capacitor.getPlatform() !== 'android'` → `null` (no-op, D8). Caché en `localStorage` (`update:check` = `{ ts, result }`): dentro de 24h y sin `force` → devuelve el caché; con "Más tarde" (`dismissUpdate()`) guarda 24h extra con `{ dismissed: true }`.
 - Estados en signals: `{ type: 'idle' | 'checking' | 'update-available' | 'no-update' | 'error' }`, y estado de descarga `{ type: 'idle' | 'downloading' | 'ready' | 'error', progress? }`.
 - Suscribe desde el constructor a los eventos del bridge (`download-complete` → estado `ready`, incluso con la app recién abierta vía `resumePending()`).
-- Re-check en `visibilitychange`: cuando `document.visibilityState === 'visible'`, re-ejecuta `check()` (sin throttle — un request por `resume` es negligible). El `localStorage` solo guarda el último resultado para UI inmediata, no como gate.
+- Re-check al volver a primer plano: doble gatillo de `document.visibilitychange` (cuando `visibilityState === 'visible'`) y `App.addListener('appStateChange', ...)` de Capacitor; ambos llaman al mismo `check()` idempotente (sin throttle — un request por `resume` es negligible). El `localStorage` solo guarda el último resultado para UI inmediata, no como gate.
 
-**AC (tests)**: con `provideHttpClient` + mocking (patrón de los specs existentes): check con update → `update-available`; sin update → `no-update`; 403 → `error` silencioso y **no** crashea; re-check en `visibilitychange` llama a la API de nuevo (sin throttle).
+**AC (tests)**: con `provideHttpClient` + mocking (patrón de los specs existentes): check con update → `update-available`; sin update → `no-update`; 403 → `error` silencioso y **no** crashea; al volver a primer plano (`visibilitychange` o `appStateChange`) llama a la API de nuevo (sin throttle).
 
 #### B4. Bridge nativo + provider
 **Archivos**: `native-update.bridge.ts`, `capacitor-update.bridge.ts`, `core/providers/update.provider.ts`, `app.config.ts`
@@ -220,10 +220,12 @@ Render: en `App` (host) vía `@if`/signals — no requiere overlay de CDK ni rut
 
 **AC**: un tag `v0.0.1-alpha.1` genera un release marcado prerelease con `album-app-dev.apk` (y sin `latest`); un tag `v0.0.1` genera release estable con `album-app.apk` y `latest`.
 
-#### C2. (Post-MVP — opcional) Changelog real en el `body`
+#### C2. Changelog real en el `body`
 **Archivos**: `build-apk.yml` (step 12), quizás `release.js`
 
-Hoy el `body` es genérico ("APK para la versión X…"). Para que el diálogo muestre notas útiles: inyectar los commits entre el tag anterior y este (vía API de GitHub en el workflow) o el mensaje de release de `release.js`. **No bloquea** la feature (el diálogo muestra lo que venga).
+Hoy el `body` es genérico ("APK para la versión X…"). Para que el diálogo muestre notas útiles, **inyectar los commits entre el tag anterior y este** (vía API de GitHub en el workflow: listar commits del tag previo a este con `github.event.compare` o `gh api .../compare/<prev>...<head>` en la descripción del release) o el mensaje de release de `release.js`. **MVP obligatorio** (no post-MVP): el diálogo de update llega mucho más fuerte con notas reales; el costo es bajo (una llamada extra al `gh api` en el workflow). Si el diff es vacío o falla, caer al body genérico actual (no bloquea el release).
+
+**Workflow dev (C3)**: incluir también las notas del push (mensaje de commit / SHA) en el body del release dev — mismo mecanismo.
 
 #### C3. Workflow de dev (`build-dev.yml`) — iteración rápida en el celular
 **Archivos**: `.github/workflows/build-dev.yml` (nuevo), `scripts/dev-version.js` (nuevo)
@@ -267,7 +269,7 @@ Hoy el `body` es genérico ("APK para la versión X…"). Para que el diálogo m
 cambios → git push a dev → build-dev.yml numera "0.0.0-beta.2" (el último dev era beta.1)
   → release dev-v0.0.0-beta.2 publicado
   → abrís la app en el celular (o volvés a primer plano)
-  → visibilitychange → check → remota beta.2 > local → diálogo "Nueva versión disponible"
+  → re-check (visibilitychange / appStateChange) → remota beta.2 > local → diálogo "Nueva versión disponible"
   → Actualizar ahora → descarga → instalar
 ```
 
@@ -309,7 +311,7 @@ cambios → git push a dev → build-dev.yml numera "0.0.0-beta.2" (el último d
 ```
 A1 → A2 → A3  (Android: se puede probar con llamadas manuales al plugin)
 B1 → B2 → B3 → B4 → B5  (Angular: B1/B2 puros con tests, después el resto)
-C1 → C3 → C2 (workflow principal + workflow dev + changelog)
+C1 → C3 → C2 (workflow principal + workflow dev + changelog — C2 en MVP)
 ```
 
 Nota de alcance (fase actual): sin pantalla de Settings todavía (solo albums/images); el auto-check al iniciar + re-check al `resume` son los únicos puntos de entrada. Cuando exista Settings, el `check(true)` ya está listo para un botón manual.
@@ -340,7 +342,7 @@ npm run release   # elige etapa + mensaje → bump de versión + tag vX.Y.Z[-eta
 npm run push      # sube código + tags → build-apk.yml compila y publica el release
 ```
 
-Si no se implementó C2 (changelog automático), editar el `body` del release a mano en GitHub con las notas reales.
+Si C2 falla (diff vacío o error de la API), editar el `body` del release a mano en GitHub con las notas reales.
 
 ## 11. Checklist de verificación manual (E2E en dispositivo)
 
