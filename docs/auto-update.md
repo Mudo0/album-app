@@ -36,14 +36,17 @@ Comparación (función pura, testeable):
 
 | Canal | Versión local | Qué release remoto busca | Qué asset baja |
 |---|---|---|---|
-| **dev** | prerelease (`alpha`/`beta`/`rc`) | El release **más reciente por fecha** de cualquier canal | El del release elegido según su etapa (ver 2.3) |
-| **release** | estable (sin sufijo) | El **más reciente por fecha** entre los **no-prerelease** | El del release elegido |
+| **dev** | prerelease (`alpha`/`beta`/`rc`) | El release **`dev-v*` más reciente** (solo builds del workflow dev) | `album-app-dev.apk` |
+| **release** | estable (sin sufijo) | El **más reciente por fecha** entre los **no-prerelease** | `album-app.apk` |
 
-La API de GitHub lista `/releases` en orden de publicación desc → el **primer** elemento que cumple el filtro del canal ES el más reciente; no hay que ordenar. Los releases dev (tag `dev-v*` generados por el workflow C3) viven en el mismo listado y son los más recientes si acabás de pushear a `dev`.
+La API de GitHub lista `/releases` en orden de publicación desc → el **primer** elemento que cumple el filtro del canal ES el más reciente; no hay que ordenar. Los releases dev (tag `dev-v*` generados por el workflow C3) viven en el mismo listado que los oficiales (`v*`).
 
-**Promoción dev → release**: si la app local es `1.0.0-alpha.4` y el release más nuevo global es `1.0.0` (estable), se le ofrece el estable (misma base, stable gana). Correcto: querés pasar al estable.
+**El canal dev NO promociona a estable (intencional — decisión de producto)**: la app dev es exclusivamente para debuggear; si está instalada, solo le interesan los builds `dev-v*`. Un release oficial estable publicado después del último build dev NO se le ofrece. Para pasar al canal estable se instala el APK estable a mano.
 
-**Anti-falso-positivo en producción**: si la local es `1.0.0` estable y en el pool el más reciente es `1.0.1-alpha.1` (prerelease), el canal release lo ignora → **no** te empuja un alpha a producción. Solo cuando salga `1.0.1` estable ofrece.
+**Anti-falso-positivo en ambos canales**:
+- App dev (`0.0.0-alpha.5`) + solo release estable más nuevo en el pool → NO ofrece (el canal dev ignora `v*`).
+- App estable (`1.0.0`) + alpha más nuevo en el pool → NO ofrece (el canal release ignora prereleases; además los builds dev son `dev-v*`, prerelease).
+- App dev (`0.0.0-alpha.5`) + `dev-v0.0.0-alpha.6` publicado → ofrece (6 > 5).
 
 ### 2.3 Assets por canal (decisión tomada: 1 APK por release, según su canal)
 
@@ -66,7 +69,7 @@ La app elige el asset según la etapa del **release remoto elegido** (no del loc
 
 | # | Decisión | Razón |
 |---|---|---|
-| **D1** | Un solo endpoint `GET /releases?per_page=100`, filtro por canal en la app. NO usar `/releases/latest`. Para el canal dev, primer release con tag que empiece con `dev-` o `v` (cualquier canal). Para canal estable, solo los no-prerelease. | El workflow actual marca `make_latest: true` en TODOS los tags → `/latest` puede apuntar a un alpha. El filtrado local no depende del estado mutable de GitHub. Los releases de dev (tag `dev-v*`) se publican en cada push a la rama `dev` y están mezclados con los estables en el listado; el checker los toma por orden cronológico (más reciente primero). |
+| **D1** | Un solo endpoint `GET /releases?per_page=100`, filtro por canal en la app. NO usar `/releases/latest`. Canal dev → primer release con tag `dev-v*`. Canal estable → primer release no-prerelease. | El workflow actual marca `make_latest: true` en TODOS los tags → `/latest` puede apuntar a un alpha. El filtrado local no depende del estado mutable de GitHub. Los canales son simétricos: dev ve solo builds `dev-v*` (decisión de producto: la app dev es solo para debug), release ve solo releases oficiales. |
 | **D2** | Comparador semver+etapas propio en TS (función pura). No agregar lib semver | La convención del proyecto (etapas) no es semver puro; una lib daría falsos "iguales". Y cero dependencias nuevas. |
 | **D3** | Plugin nativo Kotlin `UpdatePlugin` (descarga + instalación). Patrón: `ClipboardPlugin.kt` existente | El WebView no puede lanzar intents de Android. El plugin ya vive en `android/app/src/main/java/com/mudo/app/` y se registra a mano en `MainActivity`. |
 | **D4** | Descarga con `DownloadManager` nativo a `getExternalFilesDir`, **completa → recién ahí instalar**. La descarga sobrevive si matás la app | `DownloadManager` corre en el sistema, no en la WebView. Al reabrir, el plugin consulta descargas pendientes/completadas (`resumePending`) y ofrece instalar. |
@@ -144,10 +147,11 @@ registerPlugin(UpdatePlugin.class);
 **Archivos**: `src/app/core/services/updates/version.compare.ts` + `.spec.ts`
 
 - `parseVersion('v0.0.0-alpha.4')` → `{ major, minor, patch, stage: 'alpha' | 'beta' | 'rc' | null, num }` (normaliza la `v`).
+- `parseVersion` también normaliza el prefijo dev: `'dev-v0.0.0-alpha.5'` → `v0.0.0-alpha.5` → `{ 0,0,0,'alpha',5 }` (strip `dev-` antes del strip `v`).
 - `compareVersions(a, b)` → `-1 | 0 | 1` según 2.1. `STAGE_ORDER = ['rc', 'beta', 'alpha']`, `null` (stable) gana a todo.
 - Casos borde: base distinta gana por X.Y.Z aunque la etapa sea menor (`1.1.0-alpha.1 > 1.0.9-stable`); mismo stage y num igual → iguales.
 
-**AC (tests vitest)**: rejilla de casos → `0.0.0-alpha.4` vs `0.0.0` → menor (promoción); `1.0.0` vs `1.0.1-alpha.1` → menor (no empuja alpha a prod); `1.0.0-beta.2` vs `1.0.0-alpha.9` → mayor; `v1.0.0` parsea igual que `1.0.0`.
+**AC (tests vitest)**: rejilla de casos → `0.0.0-alpha.4` vs `0.0.0` → menor; `1.0.0` vs `1.0.1-alpha.1` → menor (no empuja alpha a prod); `1.0.0-beta.2` vs `1.0.0-alpha.9` → mayor; `v1.0.0` parsea igual que `1.0.0`; `dev-v0.0.0-alpha.5` parsea igual que `0.0.0-alpha.5`.
 
 #### B2. `github-releases.service.ts` — fetch + parseo + selección
 **Archivos**: `src/app/core/services/updates/github-releases.service.ts` + `.spec.ts`
@@ -155,11 +159,13 @@ registerPlugin(UpdatePlugin.class);
 - `GET https://api.github.com/repos/Mudo0/album-app/releases?per_page=100` (constante, sin header de auth).
 - Parsear: `tag_name` (normalizado), `published_at`, `draft`, `prerelease`, `assets[]` (`name`, `browser_download_url`), `body`.
 - Descartar drafts y releases sin ningún asset `.apk`.
-- `selectTarget(releases, local)` según 2.2: canal local stable → primer no-prerelease; canal dev → primer release cualquiera.
+- `selectTarget(releases, local)` según 2.2:
+  - canal local estable → primer release cuyo `tag_name` **no** empiece con `dev-` y `prerelease === false`.
+  - canal local dev → primer release cuyo `tag_name` **empiece con `dev-`**.
 - `selectAsset(release, targetStage)` según 2.3: nombre exacto por canal → fallback primer `.apk`.
 - Devuelve `UpdateInfo | null`: `{ version, url, notes, fileName }` — `null` si no hay release candidata o `compareVersion(local, remote) >= 0`.
 
-**AC**: con fixtures de la API (JSON real de GitHub), el checker elige bien el release en las 4 combinaciones (estable/estable-mayor, estable/alpha-último, dev/alpha-nuevo, dev/estable-promoción). Si la API responde 403/401/500 o sin red → error propagado como `UpdateCheckError`, sin crash.
+**AC**: con fixtures de la API (JSON real de GitHub), el checker elige bien el release en las 4 combinaciones (estable/estable-mayor → ofrece; estable + alpha último → no ofrece; dev + build dev nuevo → ofrece; dev + solo estable más nuevo → NO ofrece porque el canal dev ignora `v*`). Si la API responde 403/401/500 o sin red → error propagado como `UpdateCheckError`, sin crash.
 
 #### B3. `update-checker.service.ts` — orquestador + caché
 **Archivos**: `src/app/core/services/updates/update-checker.service.ts` + `.spec.ts`
@@ -226,33 +232,46 @@ Hoy el `body` es genérico ("APK para la versión X…"). Para que el diálogo m
 
 - **Trigger**: `on: push: branches: [dev]`. Permisos: `contents: write`. Concurrency: grupo por rama, cancel-in-progress.
 - **Pasos** (misma base que `build-apk.yml`): checkout → node/java/npm ci → **generar versión dev** → build Angular → `npx cap sync android` → `chmod +x gradlew` → firma (mismos secrets KEYSTORE_*) → `assembleRelease` → publicar release.
-- **Generación de versión dev** (`scripts/dev-version.js`): lee `package.json`, conserva `X.Y.Z`, fuerza etapa `alpha` si el package.json es estable, y setea `N = ${{ github.run_number }}` → ej: `0.0.0-alpha.5`. Aplica `npm version {v} --no-git-tag-version` + `node scripts/generate-version.js`. El `package.json` modificado NO se commitea (el workspace del runner es descartable); el APK queda con `versionName`/`versionCode` correctos porque `build.gradle` lee el package.json modificado.
-- **Publicación** (con `gh` CLI, no softprops — el tag se recrea en cada push):
+- **Generación de versión dev** (`scripts/dev-version.js`): la versión dev se numera sobre el **último release `dev-v*` publicado** (estado real del repo, no contador del CI):
+  1. Lee `package.json` → base `X.Y.Z` y etapa actual (si la versión es estable, fuerza etapa `alpha`).
+  2. Consulta el último release `dev-v*` publicado (vía `gh api` con `GH_TOKEN`) y extrae su base y etapa.
+  3. Regla de numeración:
+     - Último dev con **misma etapa y misma base** → `N = últimoDev.N + 1` (ej: `dev-v0.0.0-beta.1` → `dev-v0.0.0-beta.2`).
+     - Sin dev previo, o con **etapa o base distinta** → `N = 1` (ej: al pasar de alpha a beta, la serie dev arranca en `beta.1`).
+  4. **Si la consulta falla → el script aborta y el workflow falla, NO publica nada** (sin fallback — ver "Fallas del workflow dev" en sección 6).
+  5. Expone la versión como output (`dev-v$VERSION`) y aplica `npm version {v} --no-git-tag-version` + `node scripts/generate-version.js`. El `package.json` modificado NO se commitea (el workspace del runner es descartable); el APK queda con `versionName`/`versionCode` correctos porque `build.gradle` lee el package.json modificado.
+- **Publicación** (con `gh` CLI, no softprops — el tag se crea en el paso de versión):
   ```yaml
+  - name: Generar versión dev
+    id: version
+    env:
+      GH_TOKEN: ${{ github.token }}
+    run: node scripts/dev-version.js   # imprime dev-v0.0.0-beta.2 como output
+
   - name: Publicar release dev
     env:
       GH_TOKEN: ${{ github.token }}
     run: |
-      VERSION=$(...)   # 0.0.0-alpha.5
-      gh release create "dev-v$VERSION" \
+      VERSION="${{ steps.version.outputs.version }}"
+      gh release create "$VERSION" \
         --repo "${{ github.repository }}" \
-        --title "Dev Build $VERSION" \
+        --title "Dev Build ${VERSION#dev-}" \
         --prerelease \
         --notes "Build automático del push a dev (${{ github.sha }})"
   ```
   El tag `dev-v*` **NO** dispara el workflow principal (`v*` no matchea `dev-v0.0.0-alpha.5`), así que solo existe el release dev.
-- **Assets**: `album-app-dev.apk` (canónico) + `album-app-alpha.5.apk` (por versión).
+- **Assets**: `album-app-dev.apk` (canónico) + `album-app-beta.2.apk` (por versión).
 
 **Flujo del usuario (el caso de uso que pediste)**:
 ```
-cambios → git push a dev → build-dev.yml compila "0.0.0-alpha.<run_number>"
-  → release dev-v0.0.0-alpha.N publicado
+cambios → git push a dev → build-dev.yml numera "0.0.0-beta.2" (el último dev era beta.1)
+  → release dev-v0.0.0-beta.2 publicado
   → abrís la app en el celular (o volvés a primer plano)
-  → visibilitychange → check → remota N > local → diálogo "Nueva versión disponible"
+  → visibilitychange → check → remota beta.2 > local → diálogo "Nueva versión disponible"
   → Actualizar ahora → descarga → instalar
 ```
 
-**AC**: cada push a `dev` actualiza el release `dev-v*` (prerelease, sin `latest`); la versión remota es siempre mayor que la local anterior (run_number creciente); el tag `dev-v*` no dispara el workflow principal.
+**AC**: cada push a `dev` publica el release `dev-v*` (prerelease, sin `latest`) con numeración semántica por etapa (`alpha.1, alpha.2… beta.1, beta.2…`); la versión remota es siempre mayor que la local anterior (`N+1` sobre el último publicado, o `N=1` al cambiar etapa/base); el tag `dev-v*` no dispara el workflow principal; si la consulta del último dev falla, el workflow falla **sin publicar**.
 
 **Nota de firma**: si los secrets `KEYSTORE_*` están en el repo, el APK dev queda firmado con el MISMO keystore que los releases → se instala sobre la app existente sin desinstalar. Sin secrets, cae a debug signing (el flujo dev sobre una app firmada release falla con `INSTALL_FAILED_UPDATE_INCOMPATIBLE`). Decisión del usuario: perder datos en la transición dev→release no es problema hoy (sin usuarios reales); se revisa antes de la 1.0 estable.
 
@@ -264,6 +283,8 @@ cambios → git push a dev → build-dev.yml compila "0.0.0-alpha.<run_number>"
 | API 403 (rate limit) o 5xx | Ídem; el caché local sigue sirviendo el último check |
 | Versión local ≥ remota | `null` → ningún diálogo |
 | Version local mayor (rollback de release) | No ofrece (nunca downgrade) |
+| App dev instalada + release oficial estable más nuevo (sin build dev nuevo) | No ofrece — el canal dev solo mira tags `dev-v*` (decisión de producto: dev = debug) |
+| App estable instalada + build dev nuevo | No ofrece — el canal release solo mira no-prerelease |
 | Release sin asset `.apk` | Se descarta |
 | Release draft | Se descarta |
 | Instalar sin permiso de orígenes desconocidos | Abre settings, no crashea |
@@ -271,6 +292,7 @@ cambios → git push a dev → build-dev.yml compila "0.0.0-alpha.<run_number>"
 | App muerta durante descarga | `DownloadManager` completa igual; al reabrir `resumePending` → "Lista para instalar" |
 | Doble click en "Actualizar ahora" | Deshabilitado mientras `downloading` |
 | Web / desktop (PWA, `ng serve`, tests) | `check()` → `null` sin llamar al bridge (no-op) |
+| Falla la consulta del último release dev en `build-dev.yml` (`gh api`) | El workflow **falla y no publica** ningún release (sin fallback). El último release `dev-v*` publicado queda como fuente de verdad; el próximo push exitoso numera `+1` sobre él. |
 
 ## 7. Criterios de aceptación globales
 
@@ -309,7 +331,7 @@ Nota de alcance (fase actual): sin pantalla de Settings todavía (solo albums/im
 git push origin dev
 ```
 
-`build-dev.yml` hace todo: trunca la versión actual a `X.Y.Z`, fuerza etapa `alpha` con `run_number` (siempre creciente), compila, y publica el release `dev-v0.0.0-alpha.N`. La app la detectás en el celular al volver a primer plano.
+`build-dev.yml` hace todo: numera `X.Y.Z` + etapa actual del `package.json` con `N+1` sobre el último build dev publicado (`N=1` si cambia la etapa/base), compila, y publica el release `dev-v0.0.0-beta.N`. La app la detectás en el celular al volver a primer plano.
 
 ### Publicar release oficial (etapa alpha/beta/rc/estable)
 
@@ -342,7 +364,12 @@ Si no se implementó C2 (changelog automático), editar el `body` del release a 
 
 **Canal estable**
 - [ ] Con una app estable instalada y solo un alpha más nuevo en el pool → NO muestra el diálogo.
+- [ ] Con una app estable instalada y solo un build dev (`dev-v*`) más nuevo → NO muestra el diálogo.
 - [ ] Con una app estable y un estable más nuevo → muestra el diálogo.
+
+**Canal dev**
+- [ ] Con la app dev instalada y un release estable más nuevo (sin build dev nuevo) → NO muestra el diálogo (dev solo mira `dev-v*`).
+- [ ] Con la app dev instalada y un build dev más nuevo → muestra el diálogo.
 
 **Web/desktop**
 - [ ] `ng serve` / PWA → no-op silencioso, no rompe nada (y los tests vitest pasan).
