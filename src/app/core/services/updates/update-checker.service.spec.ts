@@ -2,23 +2,22 @@
 // Specs del orquestador: gates de plataforma, caché, doble gatillo de re-check,
 // suscripciones de descarga y flujo completo del diálogo.
 import { of, throwError } from 'rxjs';
+import { Capacitor } from '@capacitor/core';
 import { UpdateCheckerService } from './update-checker.service';
 import { UpdateCheckError, type GitHubReleasesService, type UpdateInfo } from './github-releases.service';
 import type { UpdatePluginInterface } from './native-update.interface';
 
-// ── Mocks de módulos externos (hoisted) ────────────────────────────────────
-// El checker importa Capacitor (gate de plataforma) y App (appStateChange).
-// isNativePlatform se controla por test; el listener de App se captura para
-// poder dispararlo manualmente (equivalente a volver de background).
+// ── Mocks de módulos externos ──────────────────────────────────────────────
+// - Capacitor (gate de plataforma): se mockea el MÉTODO real con vi.spyOn
+//   (patrón del repo, ver image-uploader.spec) — NO vi.mock del módulo, porque
+//   el bundler comparte @capacitor/core con specs que lo usan real y el mock a
+//   veces se degrada (flake: 18 tests caídos en bloque).
+// - App (appStateChange): vi.mock estable — es el ÚNICO consumer de
+//   @capacitor/app; el listener se captura para dispararlo manualmente
+//   (equivalente a volver de background).
 
-const { isNativePlatformMock, appStateListeners } = vi.hoisted(() => ({
-  isNativePlatformMock: vi.fn().mockReturnValue(true),
+const { appStateListeners } = vi.hoisted(() => ({
   appStateListeners: [] as Array<(data: { isActive: boolean }) => void>,
-}));
-
-vi.mock('@capacitor/core', () => ({
-  Capacitor: { isNativePlatform: () => isNativePlatformMock() },
-  registerPlugin: vi.fn(),
 }));
 
 vi.mock('@capacitor/app', () => ({
@@ -59,17 +58,21 @@ function createService(plugin = pluginMock(), github = githubMock()) {
 }
 
 beforeEach(() => {
-  isNativePlatformMock.mockReturnValue(true);
+  vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
   appStateListeners.length = 0;
   localStorage.clear();
   vi.clearAllMocks();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 // ── Gate de plataforma (D8): no-op en web/desktop/tests ─────────────────────
 
 describe('UpdateCheckerService — plataforma', () => {
   it('check() es no-op silencioso en web (isNativePlatform false)', async () => {
-    isNativePlatformMock.mockReturnValue(false);
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
     const github = githubMock(of(INFO));
     const service = createService(undefined, github);
 
@@ -79,7 +82,7 @@ describe('UpdateCheckerService — plataforma', () => {
   });
 
   it('init() no-op en web: no suscribe eventos ni dispara check', () => {
-    isNativePlatformMock.mockReturnValue(false);
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
     const plugin = pluginMock();
     const service = createService(plugin);
 

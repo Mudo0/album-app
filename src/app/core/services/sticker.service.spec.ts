@@ -13,26 +13,24 @@ function createTestImage(
 
   const imageData = { data, width, height };
 
-  const originalGetContext = HTMLCanvasElement.prototype.getContext;
-  // HACK temporal: la firma de getContext quedó sobrecargada en lib.dom (TS más
-  // nuevo) y la función simple ya no es assignable → cast por unknown.
-  // TODO(dt): arreglarlo bien — ver docs/fix-tests.md (deuda técnica).
-  HTMLCanvasElement.prototype.getContext = (function () {
-    return {
-      drawImage: () => {},
-      getImageData: () => imageData,
-    } as unknown as CanvasRenderingContext2D;
-  }) as unknown as typeof originalGetContext;
+  // jsdom NO implementa el render de canvas: el getContext real lanza
+  // "Not implemented". Se mockea con spyOn (vi.restoreAllMocks en afterEach
+  // lo restaura automáticamente, sin el queueMicrotask de antes).
+  // La firma de getContext está SOBRECARGADA en lib.dom, por eso el cast
+  // `as unknown` se limita AL OBJETO de contexto, no a la función.
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+    () =>
+      ({
+        drawImage: () => {},
+        getImageData: () => imageData,
+      }) as unknown as CanvasRenderingContext2D,
+  );
 
   Object.defineProperty(img, 'complete', { value: true, writable: false });
   Object.defineProperty(img, 'naturalWidth', { value: width, writable: false });
   Object.defineProperty(img, 'naturalHeight', { value: height, writable: false });
 
   img.src = `data:image/png;base64,${btoa('test')}`;
-
-  queueMicrotask(() => {
-    HTMLCanvasElement.prototype.getContext = originalGetContext;
-  });
 
   return img;
 }
@@ -63,6 +61,10 @@ describe('StickerService', () => {
 
   beforeEach(() => {
     service = new StickerService();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('should be created', () => {

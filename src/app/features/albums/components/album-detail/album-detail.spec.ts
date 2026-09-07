@@ -45,12 +45,34 @@ describe('AlbumDetail', () => {
     } as unknown as CdkDragStart;
   }
 
+  /**
+   * Mockea el rect del canvas: sin esto jsdom devuelve 0×0 y el clamp del
+   * onDragEnded fuerza x=0,y=0. Con 400×600 el sticker de 120px no clamp.
+   */
+  function mockCanvasRect(fixture: ReturnType<typeof TestBed.createComponent>): void {
+    const canvas = fixture.nativeElement.querySelector('.canvas');
+    if (!canvas) throw new Error('.canvas no está en el template del fixture');
+    vi.spyOn(canvas as HTMLElement, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 400,
+      bottom: 600,
+      width: 400,
+      height: 600,
+      toJSON: () => ({}),
+    } as DOMRect);
+  }
+
   let getByIdSpy: ReturnType<typeof vi.fn>;
   let getByAlbumSpy: ReturnType<typeof vi.fn>;
   let updatePositionSpy: ReturnType<typeof vi.fn>;
   let updateOrderSpy: ReturnType<typeof vi.fn>;
 
-  // Template mínimo sin CDK para evitar timeouts en jsdom
+  // Template mínimo sin CDK para evitar timeouts en jsdom. El `.canvas` existe
+  // porque onDragEnded lo busca para clamp (querySelector). Incluye el rect
+  // mockeado vía mockCanvasRect() en los tests de drag.
   const minimalTemplate = `
     <header class="header"><h1 class="title">{{ album()?.name ?? 'Cargando...' }}</h1></header>
     <main class="main">
@@ -58,9 +80,11 @@ describe('AlbumDetail', () => {
       @else if (!album()) { <p class="not-found">Álbum no encontrado</p> }
       @else if (stickers().length === 0) { <p class="empty-msg">Sin imágenes</p> }
       @else {
-        @for (s of stickers(); track s.id) {
-          <span class="sticker-id">{{ s.id }}</span>
-        }
+        <div class="canvas">
+          @for (s of stickers(); track s.id) {
+            <span class="sticker-id">{{ s.id }}</span>
+          }
+        </div>
       }
     </main>
     <footer class="footer">
@@ -182,13 +206,12 @@ describe('AlbumDetail', () => {
     expect(stickers[0].objectUrl).not.toBe(stickers[1].objectUrl);
   });
 
-  // TODO(dt): DEUDA TÉCNICA — estos tests describen el drag de la versión vieja
-  // (onDragStarted reordenaba el array). El componente cambió: ahora onDragStarted
-  // solo setea z-index, onDragEnded usa event.distance + clamp del canvas y el
-  // array NO se reordena (el order se persiste por índice). Ver docs/fix-tests.md.
+  // ── Drag: semántica ACTUAL del componente (docs/fix-tests.md) ────────────
+  // onDragStarted solo setea z-index vía Renderer2 (sin signals = sin CD);
+  // onDragEnded usa event.distance (delta) + clamp contra el canvas y persiste
+  // el order por índice del array (que NO se reordena).
 
-  // TODO(dt): la firma cambió (2º arg CdkDragStart). El spec quedó viejo.
-  it.skip('should move dragged sticker to the end without mutating it', async () => {
+  it('onDragStarted setea z-index sin reordenar ni mutar el array', async () => {
     const images = [
       createMockImage({ id: 'img1', position: { x: 10, y: 10 } }),
       createMockImage({ id: 'img2', position: { x: 20, y: 20 } }),
@@ -200,22 +223,20 @@ describe('AlbumDetail', () => {
     await flushAsync();
 
     const component = fixture.componentInstance as AlbumDetail;
-    const dragged = component.stickers()[0];
-    const originalRef = dragged;
+    const before = component.stickers();
+    const dragged = before[0];
+    const event = dragStartMock();
 
-    // HACK temporal: onDragStarted ahora requiere el CdkDragStart (2º arg).
-    // TODO(dt): arreglarlo bien — ver docs/fix-tests.md (deuda técnica).
-    component.onDragStarted(dragged, dragStartMock());
+    component.onDragStarted(dragged, event);
 
     const after = component.stickers();
-    expect(after[2]).toBe(originalRef); // img1 al final = último del DOM = arriba
-    expect(after[0].id).toBe('img2'); // el resto mantiene su orden
-    expect(dragged.x).toBe(10); // sin mutación: misma referencia, mismos valores
+    expect(after).toEqual(before); // ni reordena ni muta
+    expect(after[0]).toBe(dragged); // misma referencia
+    // z-index real aplicado al elemento fuente del evento (vía Renderer2)
+    expect(event.source.element.nativeElement.style.zIndex).toBe('1');
   });
 
-  // TODO(dt): onDragEnded usa event.distance (+ clamp del canvas); el mock viejo
-  // (getFreeDragPosition) no aplica. Arreglarlo bien — ver docs/fix-tests.md.
-  it.skip('should update position immutably on drag ended', async () => {
+  it('onDragEnded actualiza la posición immutably con event.distance', async () => {
     const images = [
       createMockImage({ id: 'img1', position: { x: 10, y: 10 } }),
       createMockImage({ id: 'img2', position: { x: 20, y: 20 } }),
@@ -224,31 +245,24 @@ describe('AlbumDetail', () => {
     const fixture = createFixture();
     fixture.detectChanges();
     await flushAsync();
+    mockCanvasRect(fixture);
 
     const component = fixture.componentInstance as AlbumDetail;
-    const original = component.stickers()[0];
+    const original = component.stickers().find((s) => s.id === 'img1')!;
 
-    // El usuario arrastró img1 al frente: queda al final del array
-    component.onDragStarted(original, dragStartMock());
-
-    const dragEnd = {
-      source: { getFreeDragPosition: () => ({ x: 42, y: 77 }) },
-    } as unknown as CdkDragEnd;
-
+    // event.distance = delta REAL del mouse; el rect 400×600 no clamp → 10+32
+    const dragEnd = { distance: { x: 32, y: 67 } } as unknown as CdkDragEnd;
     component.onDragEnded(original, dragEnd);
 
     const updated = component.stickers().find((s) => s.id === 'img1')!;
-    expect(updated).not.toBe(original); // nueva referencia => signal notifica el CD
+    expect(updated).not.toBe(original); // nueva referencia => signal notifica CD
     expect(updated.x).toBe(42);
     expect(updated.y).toBe(77);
     expect(original.x).toBe(10); // el objeto original NO se mutó
     expect(updatePositionSpy).toHaveBeenCalledWith('img1', { x: 42, y: 77 });
   });
 
-  // TODO(dt): el array nunca se reordena (order = índice del array, persistido
-  // por updateOrder); el mock de dragEnd no aplica. Arreglarlo bien —
-  // ver docs/fix-tests.md.
-  it.skip('should persist z-order (array order) on drag ended', async () => {
+  it('onDragEnded persiste el order por índice del array (sin reordenar)', async () => {
     const images = [
       createMockImage({ id: 'img1', position: { x: 10, y: 10 } }),
       createMockImage({ id: 'img2', position: { x: 20, y: 20 } }),
@@ -258,21 +272,19 @@ describe('AlbumDetail', () => {
     const fixture = createFixture();
     fixture.detectChanges();
     await flushAsync();
+    mockCanvasRect(fixture);
 
     const component = fixture.componentInstance as AlbumDetail;
     const dragged = component.stickers()[0];
 
-    component.onDragStarted(dragged, dragStartMock()); // img1 va al final: [img2, img3, img1]
-    const dragEnd = {
-      source: { getFreeDragPosition: () => ({ x: 0, y: 0 }) },
-    } as unknown as CdkDragEnd;
+    // Sin delta: el order se persiste por índice del array SIN reordenar
+    const dragEnd = { distance: { x: 0, y: 0 } } as unknown as CdkDragEnd;
     component.onDragEnded(dragged, dragEnd);
 
-    // Secuencia completa reasignada: índice del array → order persistido
     expect(updateOrderSpy).toHaveBeenCalledWith([
-      { id: 'img2', order: 0 },
-      { id: 'img3', order: 1 },
-      { id: 'img1', order: 2 },
+      { id: 'img1', order: 0 },
+      { id: 'img2', order: 1 },
+      { id: 'img3', order: 2 },
     ]);
   });
 
