@@ -14,12 +14,15 @@ function createTestImage(
   const imageData = { data, width, height };
 
   const originalGetContext = HTMLCanvasElement.prototype.getContext;
-  HTMLCanvasElement.prototype.getContext = function () {
+  // HACK temporal: la firma de getContext quedó sobrecargada en lib.dom (TS más
+  // nuevo) y la función simple ya no es assignable → cast por unknown.
+  // TODO(dt): arreglarlo bien — ver docs/fix-tests.md (deuda técnica).
+  HTMLCanvasElement.prototype.getContext = (function () {
     return {
       drawImage: () => {},
       getImageData: () => imageData,
     } as unknown as CanvasRenderingContext2D;
-  } as typeof originalGetContext;
+  }) as unknown as typeof originalGetContext;
 
   Object.defineProperty(img, 'complete', { value: true, writable: false });
   Object.defineProperty(img, 'naturalWidth', { value: width, writable: false });

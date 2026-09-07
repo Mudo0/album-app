@@ -39,6 +39,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Auto-update (UpdatePlugin): Android 8+ exige este permiso para
+         lanzar el instalador de APKs descargados vía ACTION_VIEW -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Galería (GalleryPlugin): Android 13+ usa READ_MEDIA_IMAGES, versiones
          anteriores READ_EXTERNAL_STORAGE (deprecado en 13+, se limita con maxSdk) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />

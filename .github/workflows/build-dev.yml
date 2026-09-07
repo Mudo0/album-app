@@ -1,0 +1,152 @@
+# build-dev.yml (Fase C3 del spec auto-update.md)
+#
+# Cada push a la rama `dev` publica un APK dev nuevo: la app instalada en el
+# celular lo detecta al volver a primer plano (visibilitychange / appStateChange)
+# y deja actualizar con un tap. Sin pasar por el flujo completo de release.
+#
+#   cambios → git push origin dev → este workflow:
+#     1. numera la versión dev N+1 sobre el último release dev-v* publicado
+#        (scripts/dev-version.js, estado real del repo — sin fallback)
+#     2. compila y firma el APK (mismos secrets KEYSTORE_* que el release)
+#     3. publica `dev-vX.Y.Z[-etapa.N]` (prerelease, SIN latest, tag NO v*
+#        → no dispara build-apk.yml)
+#
+# Assets del release: album-app-dev.apk (canónico del canal dev) + el nombre
+# por versión (ej. album-app-alpha.5.apk). El checker elige por canal (2.3).
+
+name: Compilar APK Dev
+
+on:
+  push:
+    branches:
+      - dev
+
+concurrency:
+  group: build-dev-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # Necesario para crear el Release dev con el APK
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Descargar el código del repositorio
+      - name: Checkout del código
+        uses: actions/checkout@v6
+
+      # 2. Configurar el entorno de Node.js (mismo major que el local: 24)
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      # 3. Configurar Java (requerido para compilar Android).
+      #    Capacitor 7+ compila capacitor-android con sourceCompatibility 21.
+      - name: Configurar Java JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      # 4. Cache de Gradle (acelera mucho los builds de Android)
+      - name: Cache de Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      # 5. Instalar dependencias de Node
+      - name: Instalar dependencias
+        run: npm ci
+
+      # 6. Tests unitarios (vitest + jsdom, como en local)
+      - name: Correr tests unitarios
+        run: npm test
+
+      # 7. GENERAR VERSIÓN DEV — N+1 sobre el último dev-v* publicado.
+      #    Modifica package.json (npm version) + version.ts + expone el tag
+      #    (steps.version.outputs.version = dev-vX.Y.Z[-etapa.N]).
+      #    Si la consulta gh falla → el script aborta → el workflow falla sin
+      #    publicar (regla sin fallback del spec).
+      - name: Generar versión dev
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/dev-version.js
+
+      # 8. Compilar la app Web en Angular y sincronizar con Capacitor
+      #    (version.ts ya tiene la versión dev → versionName/versionCode del APK)
+      - name: Build de Angular y Capacitor Sync
+        run: |
+          npm run build
+          npx cap sync android
+
+      # 9. Dar permisos de ejecución a Gradle
+      - name: Dar permisos a Gradle
+        run: chmod +x android/gradlew
+
+      # 10. Configurar la firma: mismo keystore que los releases oficiales →
+      #     el APK dev se instala SOBRE la app existente (sin desinstalar).
+      #     Sin secrets → debug signing (ver "Nota de firma" en el spec C3).
+      - name: Configurar firma del APK
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "Sin keystore en secrets: se usará debug signing"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/keystore.jks
+          cat > android/keystore.properties <<EOF
+          storeFile=../keystore.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      # 11. Compilar el APK de Android (Release, firmado con el keystore real)
+      - name: Compilar APK (Release)
+        run: |
+          cd android
+          ./gradlew assembleRelease
+
+      # 12. Tomar el APK generado por Gradle (nombre por versión, ej.
+      #     album-app-alpha.5.apk) y copiarlo a album-app-dev.apk (canónico
+      #     del canal dev — el checker lo elige en prereleases).
+      - name: Preparar APK para el release dev
+        id: apk
+        run: |
+          APK_PATH=$(find android/app/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "No se encontró el APK generado"
+            exit 1
+          fi
+          APK_NAME=$(basename "$APK_PATH")
+          cp "$APK_PATH" android/app/build/outputs/apk/release/album-app-dev.apk
+          echo "apk_name=${APK_NAME}" >> "$GITHUB_OUTPUT"
+          echo "APK final: ${APK_NAME}"
+
+      # 13. Publicar el release dev (gh CLI, no softprops — el tag dev-v* NO
+      #     dispara build-apk.yml: su filtro es 'v*').
+      #     Prerelease SIEMPRE, make_latest NO → /releases/latest queda
+      #     reservado para el último estable (invariante 9.2).
+      - name: Publicar release dev
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          NOTES="Build automático del push a dev (${{ github.sha }})"$'\n\n'"${{ github.event.head_commit.message }}"
+          gh release create "$VERSION" \
+            --repo "${{ github.repository }}" \
+            --title "Dev Build ${VERSION#dev-}" \
+            --prerelease \
+            --notes "$NOTES" \
+            android/app/build/outputs/apk/release/album-app-dev.apk \
+            "android/app/build/outputs/apk/release/${{ steps.apk.outputs.apk_name }}"

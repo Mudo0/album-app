@@ -1,0 +1,66 @@
+@if (available()) {
+  <section
+    class="update-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Actualización disponible"
+  >
+    <div class="update-card">
+      @switch (download().type) {
+        @case ('idle') {
+          <p class="eyebrow">Actualización disponible</p>
+          <h2 class="title">Versión {{ info()?.version }}</h2>
+          @if (info()?.notes) {
+            <p class="notes">{{ info()?.notes }}</p>
+          }
+          <div class="actions">
+            <button class="btn btn--ghost" type="button" (click)="onLater()">Más tarde</button>
+            <button class="btn btn--primary" type="button" (click)="onUpdateNow()">
+              Actualizar ahora
+            </button>
+          </div>
+        }
+        @case ('downloading') {
+          <p class="eyebrow">Descargando actualización</p>
+          <h2 class="title">Versión {{ info()?.version }}</h2>
+          @if (downloadProgress() !== null) {
+            <div
+              class="progress"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              [attr.aria-valuenow]="downloadRatio()"
+            >
+              <div class="progress-track">
+                <div class="progress-fill" [style.width.%]="downloadRatio()"></div>
+              </div>
+              <span class="progress-label">{{ downloadRatio().toFixed(0) }}%</span>
+            </div>
+          } @else {
+            <p class="status">
+              <span class="spinner" aria-hidden="true"></span>
+              Descargando…
+            </p>
+          }
+        }
+        @case ('ready') {
+          <p class="eyebrow">Lista para instalar</p>
+          <h2 class="title">Versión {{ info()?.version }}</h2>
+          <p class="notes">La descarga terminó. Instalá la actualización para continuar.</p>
+          <div class="actions">
+            <button class="btn btn--primary" type="button" (click)="onInstall()">
+              Instalar ahora
+            </button>
+          </div>
+        }
+        @case ('error') {
+          <p class="eyebrow">No se pudo actualizar</p>
+          <p class="notes">{{ errorMessage() }}</p>
+          <div class="actions">
+            <button class="btn btn--primary" type="button" (click)="onRetry()">Reintentar</button>
+          </div>
+        }
+      }
+    </div>
+  </section>
+}
