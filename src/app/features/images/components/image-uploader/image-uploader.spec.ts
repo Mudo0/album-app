@@ -57,6 +57,7 @@ describe('ImageUploader', () => {
   let getGallerySpy: ReturnType<typeof vi.fn>;
   let checkPermissionsSpy: ReturnType<typeof vi.fn>;
   let requestPermissionsSpy: ReturnType<typeof vi.fn>;
+  let openGallerySettingsSpy: ReturnType<typeof vi.fn>;
   let getMediaThumbnailsSpy: ReturnType<typeof vi.fn>;
   let addManyFromGallerySpy: ReturnType<typeof vi.fn>;
   let navigationBackSpy: ReturnType<typeof vi.fn>;
@@ -73,6 +74,7 @@ describe('ImageUploader', () => {
     requestPermissionsSpy = vi
       .fn()
       .mockResolvedValue({ mediaLibrary: 'granted', storageLegacy: 'granted' });
+    openGallerySettingsSpy = vi.fn().mockResolvedValue(undefined);
     getMediaThumbnailsSpy = vi.fn().mockResolvedValue([]);
     addManyFromGallerySpy = vi.fn().mockResolvedValue(undefined);
     navigationBackSpy = vi.fn();
@@ -110,6 +112,7 @@ describe('ImageUploader', () => {
             getMediaThumbnails: getMediaThumbnailsSpy,
             checkPermissions: checkPermissionsSpy,
             requestPermissions: requestPermissionsSpy,
+            openGallerySettings: openGallerySettingsSpy,
           },
         },
       ],
@@ -172,12 +175,8 @@ describe('ImageUploader', () => {
     expect(checkPermissionsSpy).not.toHaveBeenCalled();
   });
 
-  it('should show the denied state and allow requesting access again', async () => {
+  it('should show the denied state WITHOUT auto-prompt and load after granting again', async () => {
     checkPermissionsSpy.mockResolvedValue({
-      mediaLibrary: 'denied',
-      storageLegacy: 'denied',
-    });
-    requestPermissionsSpy.mockResolvedValueOnce({
       mediaLibrary: 'denied',
       storageLegacy: 'denied',
     });
@@ -188,14 +187,70 @@ describe('ImageUploader', () => {
 
     const component = fixture.componentInstance as ImageUploader;
     expect(component.permission()).toBe('denied');
-    expect(fixture.nativeElement.textContent).toContain('Dar permisos');
+    // Fix 2: con 'denied' (permanente) NO se auto-pide el diálogo — sería
+    // inútil (Android no lo vuelve a mostrar); queda el candado con settings.
+    expect(requestPermissionsSpy).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.textContent).not.toContain('Dar permisos');
+    expect(fixture.nativeElement.textContent).toContain('Abrir configuración');
 
+    // Si de todas formas el usuario sigue pidiendo (deep link al flujo viejo),
+    // y Android concede, el picker carga igual.
     await component.requestAccess();
     fixture.detectChanges();
 
-    expect(requestPermissionsSpy).toHaveBeenCalledTimes(2);
+    expect(requestPermissionsSpy).toHaveBeenCalledTimes(1);
     expect(component.permission()).toBe('granted');
     expect(getGallerySpy).toHaveBeenCalled();
+  });
+
+  // ── Fix 2: prompt-with-rationale (1 denegación real) → el diálogo puede reaparecer ──
+
+  it('prompt-with-rationale (1 deny) → candado con "Dar permisos", el diálogo reaparece al tocar', async () => {
+    // Estado REAL de Capacitor tras UNA denegación (sin "don't ask again"):
+    // shouldShowRequestPermissionRationale true → 'prompt-with-rationale'.
+    checkPermissionsSpy.mockResolvedValue({
+      mediaLibrary: 'prompt-with-rationale',
+      storageLegacy: 'prompt-with-rationale',
+    });
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    expect(component.permission()).toBe('prompt');
+    expect(fixture.nativeElement.textContent).toContain('Dar permisos');
+    expect(requestPermissionsSpy).not.toHaveBeenCalled();
+
+    // Toca "Dar permisos" → Android vuelve a mostrar el diálogo (permitido)
+    requestPermissionsSpy.mockResolvedValueOnce({
+      mediaLibrary: 'granted',
+      storageLegacy: 'granted',
+    });
+    await component.requestAccess();
+    fixture.detectChanges();
+
+    expect(requestPermissionsSpy).toHaveBeenCalledTimes(1);
+    expect(component.permission()).toBe('granted');
+    expect(getGallerySpy).toHaveBeenCalled();
+  });
+
+  it('denied (permanente) → "Abrir configuración" llama el panel de settings nativo', async () => {
+    checkPermissionsSpy.mockResolvedValue({
+      mediaLibrary: 'denied',
+      storageLegacy: 'denied',
+    });
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    expect(component.permission()).toBe('denied');
+
+    await component.openSettings();
+
+    expect(openGallerySettingsSpy).toHaveBeenCalledTimes(1);
   });
 
   it('should select and deselect media items', async () => {
@@ -540,7 +595,10 @@ describe('ImageUploader', () => {
   });
 
   it('limpia el error previo al reintentar el acceso', async () => {
-    checkPermissionsSpy.mockResolvedValue({ mediaLibrary: 'denied', storageLegacy: 'denied' });
+    checkPermissionsSpy.mockResolvedValue({
+      mediaLibrary: 'prompt-with-rationale',
+      storageLegacy: 'prompt-with-rationale',
+    });
     requestPermissionsSpy.mockRejectedValueOnce(new Error('boom nativo'));
     const fixture = createFixture();
     fixture.detectChanges();
@@ -548,7 +606,14 @@ describe('ImageUploader', () => {
     fixture.detectChanges();
 
     const component = fixture.componentInstance as ImageUploader;
-    expect(component.permission()).toBe('denied');
+    expect(component.permission()).toBe('prompt');
+
+    await component.requestAccess();
+    fixture.detectChanges();
+
+    // El diálogo falló: NO es un deny permanente → queda 'prompt' para
+    // reintentar desde el candado, con el error visible arriba.
+    expect(component.permission()).toBe('prompt');
     expect(component.error()).toContain('boom nativo');
 
     requestPermissionsSpy.mockResolvedValueOnce({ mediaLibrary: 'granted', storageLegacy: 'granted' });

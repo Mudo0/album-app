@@ -25,6 +25,10 @@ import { BackButton } from '../../../../shared/components/back-button/back-butto
 import { GalleryError, GalleryService } from '../../../../core/services/gallery.service';
 import { ImageService } from '../../services/image.service';
 import type { GalleryMedia } from '../../../../core/interfaces/gallery-plugin.interface';
+import {
+  toPermissionStatus,
+  type PermissionStatus,
+} from '../../../../core/utils/permission-status.util';
 import { base64ToBlob } from '../../../../core/utils/base64.util';
 
 const PAGE_SIZE = 100;
@@ -48,7 +52,8 @@ const THUMB_CACHE_MAX = 200;
 // los de las ventanas estables (más un máximo de UN batch en vuelo a la vez).
 const THUMB_DEBOUNCE_MS = 120;
 
-type PermissionStatus = 'unknown' | 'granted' | 'denied';
+// Estado de permisos: ver core/utils/permission-status.util.ts (4 estados,
+// 'prompt' zanja 'prompt' + 'prompt-with-rationale' de Capacitor).
 
 @Component({
   selector: 'app-image-uploader',
@@ -188,18 +193,30 @@ export class ImageUploader implements OnInit, OnDestroy {
 
   /** Si ya tenemos permiso cargamos directo (sin dialog); si no, lo pedimos. */
   private async ensureAccess(): Promise<void> {
+    let status: PermissionStatus;
     try {
       const current = await this.gallery.checkPermissions();
-      if (current.mediaLibrary === 'granted' || current.storageLegacy === 'granted') {
-        this.permission.set('granted');
-        this.error.set(null);
-        await this.loadFirstPage();
-        return;
-      }
+      status = toPermissionStatus(current);
     } catch {
-      // Si el check falla, seguimos al pedido directo
+      // Si el check falla, seguimos al pedido directo (mismo comportamiento que hoy)
+      status = 'unknown';
     }
-    await this.requestAccess();
+
+    this.permission.set(status);
+
+    if (status === 'granted') {
+      this.error.set(null);
+      await this.loadFirstPage();
+      return;
+    }
+
+    // Sin permiso: el diálogo se pide SOLO si todavía no se preguntó (estado
+    // inicial). Si ya quedó en 'prompt' (denegó una vez) o 'denied' (permanente),
+    // espera el clic del usuario — respeta la ley de Android: tras una
+    // denegación el diálogo puede reaparecer, pero no hay que spam-earlo.
+    if (status === 'unknown') {
+      await this.requestAccess();
+    }
   }
 
   async requestAccess(): Promise<void> {
@@ -208,14 +225,28 @@ export class ImageUploader implements OnInit, OnDestroy {
     this.error.set(null);
     try {
       const perms = await this.gallery.requestPermissions();
-      if (perms.mediaLibrary === 'granted' || perms.storageLegacy === 'granted') {
-        this.permission.set('granted');
+      const status = toPermissionStatus(perms);
+      this.permission.set(status);
+      if (status === 'granted') {
         await this.loadFirstPage();
-      } else {
-        this.permission.set('denied');
       }
     } catch (err) {
-      this.permission.set('denied');
+      // El diálogo falló (config, rechazo del request, etc.): no es un deny
+      // permanente → queda 'prompt' para poder reintentar desde el candado.
+      this.permission.set('prompt');
+      this.error.set(this.message(err));
+    }
+  }
+
+  /**
+   * Estado 'denied' permanente: el diálogo de Android ya no reaparece, el
+   * permiso solo se restaura desde Settings. Al volver a primer plano, el
+   * re-check (visibilitychange/appStateChange) desbloquea el picker solo.
+   */
+  async openSettings(): Promise<void> {
+    try {
+      await this.gallery.openGallerySettings();
+    } catch (err) {
       this.error.set(this.message(err));
     }
   }

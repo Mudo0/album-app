@@ -3,12 +3,14 @@ package com.mudo.app.gallery
 import android.Manifest
 import android.content.ContentResolver
 import android.content.ContentUris
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.provider.Settings
 import android.util.Size
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
@@ -133,6 +135,25 @@ class GalleryPlugin : Plugin() {
     @PermissionCallback
     private fun permissionsCallback(call: PluginCall) {
         checkPermissions(call)
+    }
+
+    /**
+     * Abre el panel de permisos de LA APP en Settings (Android 12+: "Permissions
+     * for this app"). Es el destino para el estado 'denied' permanente (2+
+     * denegaciones / "don't ask again"): el diálogo del sistema jamás vuelve a
+     * aparecer, el permiso solo se puede restaurar desde acá.
+     *
+     * Nota: App.openSettings() no existe en @capacitor/app 8.1.1 — por eso el
+     * método nativo custom (Settings.ACTION_APPLICATION_DETAILS_SETTINGS).
+     */
+    @PluginMethod
+    fun openGallerySettings(call: PluginCall) {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", context.packageName, null)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+        call.resolve()
     }
 
     // ── getGallery ──────────────────────────────────────────────────────────

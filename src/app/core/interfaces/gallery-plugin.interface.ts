@@ -35,4 +35,6 @@ export interface GalleryPluginInterface {
   }): Promise<MediaResult>;
   checkPermissions(): Promise<MediaPermissions>;
   requestPermissions(): Promise<MediaPermissions>;
+  /** Abre el panel de permisos de la app en Settings (estado 'denied' permanente). */
+  openGallerySettings(): Promise<void>;
 }

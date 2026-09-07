@@ -94,6 +94,19 @@ export class GalleryService {
     }
   }
 
+  /**
+   * Abre el panel de permisos de la app en Settings. Solo tiene sentido en el
+   * estado 'denied' (2+ denegaciones / "don't ask again"): el diálogo de Android
+   * ya no vuelve a aparecer y el permiso se restaura desde acá.
+   */
+  async openGallerySettings(): Promise<void> {
+    try {
+      await this.plugin.openGallerySettings();
+    } catch (error) {
+      throw this.mapError(error);
+    }
+  }
+
   private mapError(error: unknown): GalleryError {
     const capacitorError = error as { code?: string; message?: string };
     switch (capacitorError?.code) {

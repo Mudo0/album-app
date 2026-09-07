@@ -11,6 +11,7 @@ describe('GalleryService', () => {
     getMediaFull: vi.fn(),
     checkPermissions: vi.fn(),
     requestPermissions: vi.fn(),
+    openGallerySettings: vi.fn(),
   } as unknown as GalleryPluginInterface;
 
   let service: GalleryService;
@@ -124,5 +125,12 @@ describe('GalleryService', () => {
     vi.mocked(plugin.requestPermissions).mockResolvedValue(perms as never);
 
     await expect(service.requestPermissions()).resolves.toEqual(perms);
+  });
+
+  it('should delegate openGallerySettings (estado denied permanente)', async () => {
+    vi.mocked(plugin.openGallerySettings).mockResolvedValue();
+
+    await expect(service.openGallerySettings()).resolves.toBeUndefined();
+    expect(plugin.openGallerySettings).toHaveBeenCalledTimes(1);
   });
 });

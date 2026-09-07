@@ -16,12 +16,20 @@
     <div class="error">{{ msg }}</div>
   }
 
-  @if (isNative && permission() === 'denied') {
+  @if (isNative && (permission() === 'prompt' || permission() === 'denied')) {
     <div class="empty">
       <div class="empty-icon">🔒</div>
       <p class="empty-title">Necesitamos acceso a tu galería</p>
-      <p class="empty-text">Aceptá el permiso para elegir tus fotos</p>
-      <button class="perm-btn" (click)="requestAccess()">Dar permisos</button>
+      @if (permission() === 'denied') {
+        <p class="empty-text">
+          Android no permite volver a preguntar. Activá el permiso desde la
+          configuración y volvé: el picker se desbloquea solo.
+        </p>
+        <button class="perm-btn" (click)="openSettings()">Abrir configuración</button>
+      } @else {
+        <p class="empty-text">Aceptá el permiso para elegir tus fotos</p>
+        <button class="perm-btn" (click)="requestAccess()">Dar permisos</button>
+      }
     </div>
   }
 
