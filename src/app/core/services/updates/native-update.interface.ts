@@ -20,9 +20,17 @@ export interface UpdatePluginInterface {
   /**
    * Lanza el instalador nativo (FileProvider + ACTION_VIEW).
    * Rechaza con `code === 'unknownSourcesRequired'` si falta el permiso de
-   * orígenes desconocidos (ya abrió el settings).
+   * orígenes desconocidos — NO abre el settings: el JS muestra su cartel y
+   * el usuario llega al settings recién con openUnknownSourcesSettings().
    */
   install(options: { fileName: string }): Promise<{ started: boolean }>;
+
+  /**
+   * Abre la pantalla de "orígenes desconocidos" de la app (Android 8+).
+   * Se llama SOLO después de que install() rechazó con unknownSourcesRequired;
+   * al volver, el usuario reintenta y install() ya puede lanzar el instalador.
+   */
+  openUnknownSourcesSettings(): Promise<void>;
 
   /**
    * Consulta la descarga guardada (sobrevive a la muerte de la app). Emite el

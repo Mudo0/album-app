@@ -1,10 +1,11 @@
 // features/updates/update-dialog.ts
 // UI del auto-update (B5 del spec). Render en el host App vía @if — sin overlay
-// de CDK ni ruta. Cuatro vistas según las signals del checker:
+// de CDK ni ruta. Cinco vistas según las signals del checker:
 //   1. "Nueva versión disponible" (idle) → Actualizar ahora / Más tarde
 //   2. Descarga en curso (downloading) → spinner o barra de progreso
 //   3. "Lista para instalar" (ready) → Instalar ahora
-//   4. Error (descarga o instalación) → mensaje + Reintentar
+//   4. Cartel de orígenes desconocidos (unknown-sources) → Abrir configuración
+//   5. Error (descarga o instalación) → mensaje + Reintentar
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { UpdateCheckerService } from '../../core/services/updates/update-checker.service';
 
@@ -50,11 +51,17 @@ export class UpdateDialog {
     void this.checker.installReady();
   }
 
+  /** Botón del cartel de orígenes desconocidos: abre el settings SIN intentar
+   *  instalar. El reintento es una acción separada (onRetry). */
+  onOpenUnknownSourcesSettings(): void {
+    this.checker.openUnknownSourcesSettings();
+  }
+
   onRetry(): void {
     const dl = this.download();
-    // Error de instalación (p.ej. orígenes desconocidos) → reintentar instalar;
-    // error de descarga o de check → reiniciar la descarga.
-    if (dl.type === 'error' && dl.install) {
+    // Cartel de orígenes desconocidos o error de instalación → reintentar
+    // instalar; error de descarga o de check → reiniciar la descarga.
+    if (dl.type === 'unknown-sources' || (dl.type === 'error' && dl.install)) {
       void this.checker.installReady();
     } else {
       void this.checker.startDownload();

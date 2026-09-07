@@ -41,6 +41,10 @@ import java.io.File
  *     y se limpia el estado.
  *  5. `install(fileName)` valida `canRequestPackageInstalls()` (Android 8+)
  *     antes de lanzar el asistente con `FileProvider` + `ACTION_VIEW`.
+ *     Si el permiso falta, RECHAZA con `unknownSourcesRequired` y NO abre el
+ *     settings: el JS muestra su cartel primero y el usuario recién después
+ *     llega a la pantalla de orígenes desconocidos con `openUnknownSourcesSettings()`
+ *     (el orden inverso — el cartel siempre va antes que el settings).
  */
 @CapacitorPlugin(name = "Update")
 class UpdatePlugin : Plugin() {
@@ -167,8 +171,10 @@ class UpdatePlugin : Plugin() {
 
     @PluginMethod
     fun install(call: PluginCall) {
+        // Fix 3: NO se abre el settings acá. Rechaza con unknownSourcesRequired
+        // y el JS muestra su cartel primero; el usuario recién después abre el
+        // settings con openUnknownSourcesSettings() y vuelve a intentar.
         if (!canRequestPackageInstalls()) {
-            launchUnknownSourcesSettings()
             call.reject(
                 "Habilitá la instalación de apps de orígenes desconocidos.",
                 EC_UNKNOWN_SOURCES,
@@ -204,6 +210,20 @@ class UpdatePlugin : Plugin() {
         prefs.edit().clear().apply()
 
         call.resolve(JSObject().apply { put("started", true) })
+    }
+
+    // ── openUnknownSourcesSettings ───────────────────────────────────────────
+
+    /**
+     * Abre la pantalla de "orígenes desconocidos" de la app (Android 8+). Es
+     * la contraparte del cartel del dialog: el JS decide CUÁNDO mostrar el
+     * cartel (recién tras un install() rechazado con unknownSourcesRequired)
+     * y recién entonces el usuario llega acá.
+     */
+    @PluginMethod
+    fun openUnknownSourcesSettings(call: PluginCall) {
+        launchUnknownSourcesSettings()
+        call.resolve()
     }
 
     // ── resumePending ────────────────────────────────────────────────────────

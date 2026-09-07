@@ -46,7 +46,10 @@ export type DownloadState =
   | { type: 'downloading'; progress: number | null }
   | { type: 'ready' }
   /** `install: true` → el error viene de installReady (p.ej. orígenes desconocidos). */
-  | { type: 'error'; message: string; install?: boolean };
+  | { type: 'error'; message: string; install?: boolean }
+  /** Falta el permiso de orígenes desconocidos: el dialog muestra el cartel y
+   *  abre el settings con openUnknownSourcesSettings() (Fix 3). */
+  | { type: 'unknown-sources' };
 
 interface CheckCache {
   ts: number;
@@ -192,15 +195,23 @@ export class UpdateCheckerService {
       this.state.set('no-update');
     } catch (error) {
       const code = (error as { code?: string })?.code;
+      if (code === 'unknownSourcesRequired') {
+        // El settings NO se abre solo (Fix 3): el dialog muestra el cartel y
+        // recién con el clic del usuario se llega al settings.
+        this.download.set({ type: 'unknown-sources' });
+        return;
+      }
       this.download.set({
         type: 'error',
         install: true,
-        message:
-          code === 'unknownSourcesRequired'
-            ? 'Habilitá la instalación de orígenes desconocidos y reintentá.'
-            : 'No se pudo instalar la actualización.',
+        message: 'No se pudo instalar la actualización.',
       });
     }
+  }
+
+  /** Abre la pantalla de orígenes desconocidos (botón del cartel del dialog). */
+  openUnknownSourcesSettings(): void {
+    void this.plugin.openUnknownSourcesSettings();
   }
 
   /**

@@ -36,6 +36,7 @@ function setup(download: DownloadState = { type: 'idle' }, available = true): Ha
     startDownload: vi.fn().mockResolvedValue(undefined),
     dismissUpdate: vi.fn(),
     installReady: vi.fn().mockResolvedValue(undefined),
+    openUnknownSourcesSettings: vi.fn(),
   } as unknown as UpdateCheckerService;
 
   TestBed.configureTestingModule({
@@ -123,15 +124,39 @@ describe('UpdateDialog', () => {
     expect(checker.installReady).not.toHaveBeenCalled();
   });
 
-  it('error de instalación (orígenes desconocidos) → Reintentar vuelve a instalar', () => {
+  it('error de instalación (otro motivo) → Reintentar vuelve a instalar', () => {
     const { checker, el } = render({
       type: 'error',
       install: true,
-      message: 'Habilitá la instalación de orígenes desconocidos y reintentá.',
+      message: 'No se pudo instalar la actualización.',
     });
-    expect(el.textContent).toContain('orígenes desconocidos');
+    expect(el.textContent).toContain('No se pudo instalar');
     click(el.querySelector('.btn--primary'));
     expect(checker.installReady).toHaveBeenCalledTimes(1);
     expect(checker.startDownload).not.toHaveBeenCalled();
+  });
+
+  // ── Fix 3: cartel de orígenes desconocidos ───────────────────────────────
+
+  it('unknown-sources → cartel con "Abrir configuración" y "Reintentar"', () => {
+    const { el } = render({ type: 'unknown-sources' });
+    expect(el.textContent).toContain('orígenes desconocidos');
+    expect(el.textContent).toContain('Abrir configuración');
+    expect(el.textContent).toContain('Reintentar');
+  });
+
+  it('click en "Abrir configuración" → abre el settings del sistema (sin intentar instalar)', () => {
+    const { checker, el } = render({ type: 'unknown-sources' });
+    click(el.querySelector('.btn--primary'));
+    expect(checker.openUnknownSourcesSettings).toHaveBeenCalledTimes(1);
+    expect(checker.installReady).not.toHaveBeenCalled();
+    expect(checker.startDownload).not.toHaveBeenCalled();
+  });
+
+  it('click en "Reintentar" (cartel) → vuelve a intentar instalar', () => {
+    const { checker, el } = render({ type: 'unknown-sources' });
+    click(el.querySelector('.btn--ghost'));
+    expect(checker.installReady).toHaveBeenCalledTimes(1);
+    expect(checker.openUnknownSourcesSettings).not.toHaveBeenCalled();
   });
 });

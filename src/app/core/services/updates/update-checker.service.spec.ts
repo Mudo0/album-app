@@ -42,6 +42,7 @@ function pluginMock(): UpdatePluginInterface {
   return {
     download: vi.fn().mockResolvedValue({ downloadId: 1 }),
     install: vi.fn().mockResolvedValue({ started: true }),
+    openUnknownSourcesSettings: vi.fn().mockResolvedValue(undefined),
     resumePending: vi.fn().mockResolvedValue({ state: 'none' }),
     addListener: vi.fn().mockResolvedValue({ remove: vi.fn() }),
   } as unknown as UpdatePluginInterface;
@@ -278,7 +279,7 @@ describe('UpdateCheckerService — download/install', () => {
     expect(service.download().type).toBe('idle');
   });
 
-  it('installReady con unknownSourcesRequired → mensaje claro, sin crash', async () => {
+  it('installReady con unknownSourcesRequired → estado unknown-sources (el settings NO se abre solo)', async () => {
     const plugin = pluginMock();
     plugin.install = vi
       .fn()
@@ -289,10 +290,33 @@ describe('UpdateCheckerService — download/install', () => {
 
     await service.installReady();
 
+    // Fix 3: el cartel de orígenes desconocidos aparece PRIMERO; el settings se
+    // abre recién con openUnknownSourcesSettings() (botón del dialog).
+    expect(service.download().type).toBe('unknown-sources');
+    expect(plugin.openUnknownSourcesSettings).not.toHaveBeenCalled();
+  });
+
+  it('openUnknownSourcesSettings delega al plugin (botón del cartel)', () => {
+    const plugin = pluginMock();
+    const service = createService(plugin);
+
+    service.openUnknownSourcesSettings();
+
+    expect(plugin.openUnknownSourcesSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('installReady con otro error → estado error install:true sin mensaje de orígenes desconocidos', async () => {
+    const plugin = pluginMock();
+    plugin.install = vi.fn().mockRejectedValue(Object.assign(new Error('boom'), { code: 'OTHER' }));
+    const service = createService(plugin, githubMock(of(INFO)));
+    await service.check();
+    service.download.set({ type: 'ready' });
+
+    await service.installReady();
+
     expect(service.download().type).toBe('error');
-    expect(service.download()).toMatchObject({
-      message: expect.stringContaining('orígenes desconocidos') as string,
-    });
+    expect((service.download() as { install?: boolean }).install).toBe(true);
+    expect((service.download() as { message: string }).message).not.toContain('orígenes');
   });
 });
 

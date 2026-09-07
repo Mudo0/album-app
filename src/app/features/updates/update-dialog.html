@@ -53,6 +53,25 @@
             </button>
           </div>
         }
+        @case ('unknown-sources') {
+          <p class="eyebrow">Falta un permiso de Android</p>
+          <h2 class="title">Habilitá los orígenes desconocidos</h2>
+          <p class="notes">
+            Para instalar la actualización, Android necesita que permitas
+            instalar apps desde este origen. Activá el permiso y volvé a
+            intentar.
+          </p>
+          <div class="actions">
+            <button class="btn btn--ghost" type="button" (click)="onRetry()">Reintentar</button>
+            <button
+              class="btn btn--primary"
+              type="button"
+              (click)="onOpenUnknownSourcesSettings()"
+            >
+              Abrir configuración
+            </button>
+          </div>
+        }
         @case ('error') {
           <p class="eyebrow">No se pudo actualizar</p>
           <p class="notes">{{ errorMessage() }}</p>
