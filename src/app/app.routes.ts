@@ -1,4 +1,5 @@
 import type { Routes } from '@angular/router';
+import { ensureGalleryPermission } from './core/guards/gallery-permission.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: '/albums', pathMatch: 'full' },
@@ -39,11 +40,22 @@ export const routes: Routes = [
         data: { backTo: '/albums/:albumId' },
       },
       {
+        // Fix 1: pantalla de permisos dedicada — destino del guard de ':id'.
+        // Declarada ANTES de ':id' (segmento estático > paramétrico) y FUERA
+        // de la jerarquía ':id/...' para que el guard no se recuse a sí mismo.
+        path: 'permissions/:albumId',
+        loadComponent: () =>
+          import('./features/images/components/permission-required/permission-required').then(
+            (m) => m.PermissionRequired,
+          ),
+      },
+      {
         path: ':id',
         loadComponent: () =>
           import('./features/albums/components/album-detail/album-detail').then(
             (m) => m.AlbumDetail,
           ),
+        canActivate: [ensureGalleryPermission],
         data: { backTo: '/albums' },
       },
       { path: '**', redirectTo: '/albums' },

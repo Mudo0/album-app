@@ -1,0 +1,44 @@
+<header class="header">
+  <app-back-button (back)="onBack()" />
+  <h1 class="title">Permiso de galería</h1>
+  <div class="spacer"></div>
+</header>
+
+<main class="main">
+  @if (!isNative) {
+    <div class="notice">
+      📱 La galería está disponible solo en la app Android. Probá este flujo
+      en el dispositivo con Capacitor.
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="empty">
+      <span class="spinner" aria-hidden="true"></span>
+      <p class="empty-text">Verificando permisos…</p>
+    </div>
+  }
+
+  @if (error(); as msg) {
+    <div class="error">{{ msg }}</div>
+  }
+
+  @if (isNative && !loading() && permission() !== 'granted') {
+    <div class="empty">
+      <div class="empty-icon">🔒</div>
+      <p class="empty-title">Necesitamos acceso a tu galería</p>
+      @if (permission() === 'denied') {
+        <p class="empty-text">
+          Android no permite volver a preguntar. Activá el permiso desde la
+          configuración y volvé: te llevamos a tu álbum automáticamente.
+        </p>
+        <button class="perm-btn" (click)="openSettings()">Abrir configuración</button>
+      } @else {
+        <p class="empty-text">
+          Aceptá el permiso para ver fotos del álbum y agregar nuevas.
+        </p>
+        <button class="perm-btn" (click)="requestAccess()">Dar permisos</button>
+      }
+    </div>
+  }
+</main>
