@@ -1,4 +1,4 @@
-# build-dev.yml (Fase C3 del spec auto-update.md)
+# build-dev.yml (Fase C3 del registro docs/feat/implemented/auto-update.md)
 #
 # Cada push a la rama `dev` publica un APK dev nuevo: la app instalada en el
 # celular lo detecta al volver a primer plano (visibilitychange / appStateChange)

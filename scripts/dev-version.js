@@ -1,5 +1,5 @@
 // scripts/dev-version.js
-// Genera la versión del build dev (Fase C3 del spec auto-update.md):
+// Genera la versión del build dev (Fase C3 del registro docs/feat/implemented/auto-update.md):
 //
 //   git push origin dev → build-dev.yml → este script numera la versión dev
 //   N+1 sobre el ÚLTIMO release dev-v* publicado (estado real del repo, no
