@@ -22,6 +22,7 @@ import { BackButton } from '../../../../shared/components/back-button/back-butto
 import { ImageService } from '../../../images/services/image.service';
 import { StickerImage, StickerBounds } from '../../../../core/models/stickerImage.viewModel';
 import { LongPressDirective, LongPressPosition } from '../../../../shared/directives/long-press';
+import { NavigationService } from '../../../../core/services/navigation.service';
 
 
 
@@ -37,6 +38,7 @@ export class AlbumDetail implements OnInit, OnDestroy {
   private readonly albumService = inject(AlbumService);
   private readonly imageService = inject(ImageService);
   private readonly router = inject(Router);
+  private readonly navigation = inject(NavigationService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly renderer = inject(Renderer2);
   private readonly hostEl = inject(ElementRef<HTMLElement>);
@@ -71,6 +73,14 @@ export class AlbumDetail implements OnInit, OnDestroy {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe(() => this.loadImages());
+  }
+
+  /**
+   * Back de la pantalla: delega al servicio centralizado de navegación
+   * (historial real si navegamos dentro de la app; jerarquía si es deep link).
+   */
+  onBack(): void {
+    this.navigation.back();
   }
 
   /**
@@ -116,9 +126,15 @@ export class AlbumDetail implements OnInit, OnDestroy {
       y = Math.max(0, Math.min(y, rect.height - stickerWidth));
     }
 
-    this.stickers.update((current) =>
-      current.map((s) => (s.id === sticker.id ? { ...s, x, y } : s)),
-    );
+    // Reordenar MOVIENDO el sticker arrastrado al final (traer al frente): el
+    // order guardado refleja el orden visual real (el último arrastrado queda
+    // arriba) y PERSISTE al volver a entrar al álbum. Antes el array nunca se
+    // reordenaba — updateOrder persistía siempre el mismo mapeo [A→0, B→1] y
+    // el apilamiento logrado con el z-index transitorio se perdía al recargar.
+    this.stickers.update((current) => {
+      const without = current.filter((s) => s.id !== sticker.id);
+      return [...without, { ...sticker, x, y }];
+    });
     this.imageService.updatePosition(sticker.id, { x, y });
     this.imageService.updateOrder(
       this.stickers().map((s, i) => ({ id: s.id, order: i })),

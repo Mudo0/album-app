@@ -11,6 +11,8 @@ import {
   viewChild,
 } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
+import { App } from '@capacitor/app';
+import type { PluginListenerHandle } from '@capacitor/core';
 import {
   CdkVirtualScrollViewport,
   ScrollingModule,
@@ -146,10 +148,42 @@ export class ImageUploader implements OnInit, OnDestroy {
   private readonly pendingThumbs = new Set<string>();
   private fetchInFlight = false;
   private readonly subscriptions = new Subscription();
+  /** Handle del listener de retorno a primer plano (removido en destroy). */
+  private appStateListener?: Promise<PluginListenerHandle>;
+  /** Handle del listener del botón físico de Android (removido en destroy). */
+  private backButtonListener?: Promise<PluginListenerHandle>;
 
   async ngOnInit(): Promise<void> {
     if (!this.isNative) return;
+    // Re-check al volver a primer plano: si el usuario otorgó el permiso en
+    // settings, la pantalla de candado se desbloquea sola (sin re-tap del
+    // botón). Mismo patrón de doble gatillo que update-checker.service.ts:
+    // visibilitychange es frágil en WebView al retomar; appStateChange es el
+    // canal nativo confiable de Capacitor. Solo se re-evalúa si el estado es
+    // denied (si ya hay permiso no se recarga la galería al volver).
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    this.appStateListener = App.addListener('appStateChange', this.onAppStateChange);
+    // Botón físico de Android: hace history.back() sin pasar por nuestro
+    // handler del back-button. Aplica la MISMA regla de onBack() (negada →
+    // lista; concedida/sin estado → back normal), si no el gesto físico
+    // reproduciría el bug del detail vacío.
+    this.backButtonListener = App.addListener('backButton', () => this.onBack());
     await this.ensureAccess();
+  }
+
+  /**
+   * Back del picker según estado de permiso: DENEGADO → album-list (canceló el
+   * flujo, el detail vacío es un callejón sin salida); CONCEDIDO → back normal
+   * (vuelve al detail, igual que hoy). Es el mismo destino para el botón "←"
+   * del header y el gesto físico de Android.
+   */
+  onBack(): void {
+    if (this.permission() === 'denied') {
+      // Canceló el flujo: reemplaza el picker por la lista (historial limpio)
+      this.navigation.toAlbumList();
+    } else {
+      this.navigation.back();
+    }
   }
 
   /** Si ya tenemos permiso cargamos directo (sin dialog); si no, lo pedimos. */
@@ -158,6 +192,7 @@ export class ImageUploader implements OnInit, OnDestroy {
       const current = await this.gallery.checkPermissions();
       if (current.mediaLibrary === 'granted' || current.storageLegacy === 'granted') {
         this.permission.set('granted');
+        this.error.set(null);
         await this.loadFirstPage();
         return;
       }
@@ -168,6 +203,9 @@ export class ImageUploader implements OnInit, OnDestroy {
   }
 
   async requestAccess(): Promise<void> {
+    // Un reintento borra el error previo: el texto del candado no debe quedar
+    // pegado cuando el usuario vuelve a intentar.
+    this.error.set(null);
     try {
       const perms = await this.gallery.requestPermissions();
       if (perms.mediaLibrary === 'granted' || perms.storageLegacy === 'granted') {
@@ -181,6 +219,18 @@ export class ImageUploader implements OnInit, OnDestroy {
       this.error.set(this.message(err));
     }
   }
+
+  private readonly onVisibilityChange = (): void => {
+    if (document.visibilityState === 'visible' && this.permission() === 'denied') {
+      void this.ensureAccess();
+    }
+  };
+
+  private readonly onAppStateChange = ({ isActive }: { isActive: boolean }): void => {
+    if (isActive && this.permission() === 'denied') {
+      void this.ensureAccess();
+    }
+  };
 
   async loadFirstPage(): Promise<void> {
     this.offset = 0;
@@ -374,6 +424,12 @@ export class ImageUploader implements OnInit, OnDestroy {
     this.subscriptions.unsubscribe();
     this.resizeObserver?.disconnect();
     if (this.debounceTimer !== undefined) clearTimeout(this.debounceTimer);
+    // Remover los listeners del ciclo de vida: si quedan colgados, un resume
+    // o un gesto de back posterior ejecuta onBack()/ensureAccess() sobre una
+    // pantalla que ya no existe.
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    void this.appStateListener?.then((h) => h.remove());
+    void this.backButtonListener?.then((h) => h.remove());
     for (const url of this.thumbs().values()) {
       URL.revokeObjectURL(url);
     }

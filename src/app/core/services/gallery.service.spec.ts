@@ -100,6 +100,25 @@ describe('GalleryService', () => {
     }
   });
 
+  it('should map raw Capacitor permission errors to a friendly accessDenied', async () => {
+    vi.mocked(plugin.getGallery).mockRejectedValue(
+      new Error(
+        'Missing the following permissions in AndroidManifest.xml:\nandroid.permission.READ_EXTERNAL_STORAGE',
+      ),
+    );
+
+    try {
+      await service.getGallery(100, 0);
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(GalleryError);
+      expect((err as GalleryError).code).toBe('accessDenied');
+      expect((err as GalleryError).message).toBe(
+        'Necesitás dar permiso para leer la galería.',
+      );
+    }
+  });
+
   it('should delegate requestPermissions', async () => {
     const perms = { mediaLibrary: 'granted', storageLegacy: 'granted' };
     vi.mocked(plugin.requestPermissions).mockResolvedValue(perms as never);

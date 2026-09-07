@@ -8,6 +8,35 @@ import { ImageService } from '../../services/image.service';
 import { GalleryService } from '../../../../core/services/gallery.service';
 import type { GalleryMedia } from '../../../../core/interfaces/gallery-plugin.interface';
 
+// ── Mock de @capacitor/app ─────────────────────────────────────────────────
+// El picker registra listeners de appStateChange (re-check al primer plano) y
+// backButton (gesto físico de Android) en ngOnInit. El mock captura los
+// callbacks para dispararlos manualmente en los tests y las handles para
+// verificar el cleanup en ngOnDestroy.
+const { appListeners } = vi.hoisted(() => ({
+  appListeners: {
+    appState: [] as Array<(data: { isActive: boolean }) => void>,
+    backButton: [] as Array<() => void>,
+    handles: [] as Array<{ remove: ReturnType<typeof vi.fn> }>,
+  },
+}));
+
+vi.mock('@capacitor/app', () => ({
+  App: {
+    addListener: vi.fn((event: string, cb: unknown) => {
+      const handle = { remove: vi.fn() };
+      appListeners.handles.push(handle);
+      if (event === 'appStateChange') {
+        appListeners.appState.push(cb as (data: { isActive: boolean }) => void);
+      }
+      if (event === 'backButton') {
+        appListeners.backButton.push(cb as () => void);
+      }
+      return Promise.resolve(handle);
+    }),
+  },
+}));
+
 describe('ImageUploader', () => {
   function createMedia(id: string): GalleryMedia {
     return {
@@ -31,6 +60,7 @@ describe('ImageUploader', () => {
   let getMediaThumbnailsSpy: ReturnType<typeof vi.fn>;
   let addManyFromGallerySpy: ReturnType<typeof vi.fn>;
   let navigationBackSpy: ReturnType<typeof vi.fn>;
+  let navigationToAlbumListSpy: ReturnType<typeof vi.fn>;
   let createObjectURLSpy: ReturnType<typeof vi.fn>;
   let revokeObjectURLSpy: ReturnType<typeof vi.fn>;
   let blobCounter: number;
@@ -46,8 +76,12 @@ describe('ImageUploader', () => {
     getMediaThumbnailsSpy = vi.fn().mockResolvedValue([]);
     addManyFromGallerySpy = vi.fn().mockResolvedValue(undefined);
     navigationBackSpy = vi.fn();
+    navigationToAlbumListSpy = vi.fn();
 
     blobCounter = 0;
+    appListeners.appState.length = 0;
+    appListeners.backButton.length = 0;
+    appListeners.handles.length = 0;
     createObjectURLSpy = vi.fn(() => `blob:fake-${blobCounter++}`);
     revokeObjectURLSpy = vi.fn();
     // jsdom no implementa createObjectURL/revokeObjectURL de verdad
@@ -67,7 +101,7 @@ describe('ImageUploader', () => {
       imports: [ImageUploader],
       providers: [
         provideRouter([]),
-        { provide: NavigationService, useValue: { back: navigationBackSpy } },
+        { provide: NavigationService, useValue: { back: navigationBackSpy, toAlbumList: navigationToAlbumListSpy } },
         { provide: ImageService, useValue: { addManyFromGallery: addManyFromGallerySpy } },
         {
           provide: GalleryService,
@@ -442,5 +476,150 @@ describe('ImageUploader', () => {
     fixture.destroy();
 
     expect(revokeObjectURLSpy).toHaveBeenCalledTimes(6); // revoke total en destroy
+  });
+
+  // ── Fix 1: re-check al primer plano + limpieza de error ──────────────────
+
+  it('re-check al volver a primer plano: si otorgó en settings se desbloquea sola', async () => {
+    checkPermissionsSpy.mockResolvedValue({ mediaLibrary: 'denied', storageLegacy: 'denied' });
+    requestPermissionsSpy.mockResolvedValueOnce({ mediaLibrary: 'denied', storageLegacy: 'denied' });
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    expect(component.permission()).toBe('denied');
+
+    // El usuario otorgó en settings → el próximo check devuelve granted
+    checkPermissionsSpy.mockResolvedValue({ mediaLibrary: 'granted', storageLegacy: 'granted' });
+
+    appListeners.appState[appListeners.appState.length - 1]({ isActive: true });
+    await flush();
+    fixture.detectChanges();
+
+    expect(component.permission()).toBe('granted');
+    expect(getGallerySpy).toHaveBeenCalled();
+  });
+
+  it('re-check por visibilitychange al volver al tab', async () => {
+    checkPermissionsSpy.mockResolvedValue({ mediaLibrary: 'denied', storageLegacy: 'denied' });
+    requestPermissionsSpy.mockResolvedValueOnce({ mediaLibrary: 'denied', storageLegacy: 'denied' });
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    expect(component.permission()).toBe('denied');
+
+    checkPermissionsSpy.mockResolvedValue({ mediaLibrary: 'granted', storageLegacy: 'granted' });
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    fixture.detectChanges();
+
+    expect(component.permission()).toBe('granted');
+  });
+
+  it('no re-evalúa permisos al volver si ya hay permiso concedido', async () => {
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    expect(component.permission()).toBe('granted');
+    const callsBefore = checkPermissionsSpy.mock.calls.length;
+
+    appListeners.appState[appListeners.appState.length - 1]({ isActive: true });
+    await flush();
+
+    // Concedido: el re-check no re-corre (no recarga la galería al volver)
+    expect(checkPermissionsSpy.mock.calls.length).toBe(callsBefore);
+  });
+
+  it('limpia el error previo al reintentar el acceso', async () => {
+    checkPermissionsSpy.mockResolvedValue({ mediaLibrary: 'denied', storageLegacy: 'denied' });
+    requestPermissionsSpy.mockRejectedValueOnce(new Error('boom nativo'));
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    expect(component.permission()).toBe('denied');
+    expect(component.error()).toContain('boom nativo');
+
+    requestPermissionsSpy.mockResolvedValueOnce({ mediaLibrary: 'granted', storageLegacy: 'granted' });
+    await component.requestAccess();
+    fixture.detectChanges();
+
+    expect(component.error()).toBeNull();
+    expect(component.permission()).toBe('granted');
+  });
+
+  // ── Fix 3: back del picker según estado de permiso ───────────────────────
+
+  it('onBack navega a la lista de álbumes cuando el permiso está denegado', async () => {
+    checkPermissionsSpy.mockResolvedValue({ mediaLibrary: 'denied', storageLegacy: 'denied' });
+    requestPermissionsSpy.mockResolvedValueOnce({ mediaLibrary: 'denied', storageLegacy: 'denied' });
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    expect(component.permission()).toBe('denied');
+
+    component.onBack();
+
+    expect(navigationToAlbumListSpy).toHaveBeenCalled();
+    expect(navigationBackSpy).not.toHaveBeenCalled();
+  });
+
+  it('onBack delega al back normal cuando el permiso está concedido', async () => {
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    const component = fixture.componentInstance as ImageUploader;
+    expect(component.permission()).toBe('granted');
+
+    component.onBack();
+
+    expect(navigationBackSpy).toHaveBeenCalled();
+    expect(navigationToAlbumListSpy).not.toHaveBeenCalled();
+  });
+
+  it('el gesto físico de Android aplica la misma regla que el botón "←"', async () => {
+    checkPermissionsSpy.mockResolvedValue({ mediaLibrary: 'denied', storageLegacy: 'denied' });
+    requestPermissionsSpy.mockResolvedValueOnce({ mediaLibrary: 'denied', storageLegacy: 'denied' });
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flush();
+    fixture.detectChanges();
+
+    expect(appListeners.backButton.length).toBeGreaterThan(0);
+    appListeners.backButton[appListeners.backButton.length - 1]();
+
+    expect(navigationToAlbumListSpy).toHaveBeenCalled();
+    expect(navigationBackSpy).not.toHaveBeenCalled();
+  });
+
+  it('remueve los listeners de App al destruirse el picker', async () => {
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flush();
+
+    expect(appListeners.handles.length).toBeGreaterThan(0);
+
+    fixture.destroy();
+    await flush();
+
+    for (const handle of appListeners.handles) {
+      expect(handle.remove).toHaveBeenCalled();
+    }
   });
 });

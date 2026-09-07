@@ -113,7 +113,18 @@ class GalleryPlugin : Plugin() {
     @PluginMethod
     override fun requestPermissions(call: PluginCall) {
         if (!mediaPermissionGranted()) {
-            requestAllPermissions(call, "permissionsCallback")
+            // Pedir SOLO el alias que aplica según API level: requestAllPermissions
+            // pide los strings de TODOS los aliases ([READ_MEDIA_IMAGES,
+            // READ_EXTERNAL_STORAGE]) y en API 33+ READ_EXTERNAL_STORAGE no existe
+            // en el manifest efectivo (maxSdkVersion=32) → Capacitor rechaza el
+            // call completo con "Missing the following permissions..." aunque el
+            // usuario ya haya concedido READ_MEDIA_IMAGES.
+            val alias = if (Build.VERSION.SDK_INT >= API_LEVEL_33) {
+                "mediaLibrary"
+            } else {
+                "storageLegacy"
+            }
+            requestPermissionForAlias(alias, call, "permissionsCallback")
         } else {
             checkPermissions(call)
         }

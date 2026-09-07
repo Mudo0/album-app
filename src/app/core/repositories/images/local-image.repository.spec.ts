@@ -94,12 +94,18 @@ describe('LocalImageRepository', () => {
   });
 
   describe('getLastByAlbum', () => {
-    it('should return the last image of the album', async () => {
-      await repo.getLastByAlbum('a1');
+    it('should return the image with the highest order, not .last() por primary key', async () => {
+      const img2 = { ...mockImage, id: 'img2', order: 2 };
+      // sortBy simula el orden ascendente de Dexie por 'order'
+      imagesTable['sortBy'].mockResolvedValue([mockImage, img2]);
+
+      const result = await repo.getLastByAlbum('a1');
 
       expect(imagesTable['where']).toHaveBeenCalledWith('albumId');
       expect(imagesTable['equals']).toHaveBeenCalledWith('a1');
-      expect(imagesTable['last']).toHaveBeenCalled();
+      expect(imagesTable['sortBy']).toHaveBeenCalledWith('order');
+      expect(imagesTable['last']).not.toHaveBeenCalled();
+      expect(result).toBe(img2); // el de mayor order, no el último por UUID
     });
   });
 

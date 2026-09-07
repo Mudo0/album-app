@@ -93,4 +93,15 @@ describe('NavigationService', () => {
       replaceUrl: true,
     });
   });
+
+  it('should navigate to album list replacing the current screen', async () => {
+    const { router } = await setup();
+    const navigateByUrlSpy = vi.spyOn(router, 'navigateByUrl');
+
+    TestBed.inject(NavigationService).toAlbumList();
+
+    expect(navigateByUrlSpy).toHaveBeenCalledWith('/albums', {
+      replaceUrl: true,
+    });
+  });
 });

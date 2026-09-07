@@ -30,6 +30,11 @@ export class AlbumForm implements OnInit {
     return !!this.id();
   }
 
+  /** Back de la pantalla: delega al servicio centralizado de navegación. */
+  onBack(): void {
+    this.navigation.back();
+  }
+
   async ngOnInit(): Promise<void> {
     const albumId = this.id();
     if (!albumId) return;

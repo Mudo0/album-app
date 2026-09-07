@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router, Routes } from '@angular/router';
 import { AlbumForm } from './album-form';
 import { AlbumService } from '../../services/album.service';
+import { NavigationService } from '../../../../core/services/navigation.service';
 
 
 const testRoutes: Routes = [
@@ -53,6 +54,20 @@ describe('AlbumForm', () => {
 
     const el: HTMLElement = fixture.nativeElement;
     expect(el.textContent).toContain('Nuevo álbum');
+  });
+
+  it('onBack delega al NavigationService centralizado', async () => {
+    await setup();
+    const fixture = TestBed.createComponent(AlbumForm);
+    fixture.detectChanges();
+
+    const backSpy = vi
+      .spyOn(TestBed.inject(NavigationService), 'back')
+      .mockImplementation(() => undefined);
+
+    fixture.componentInstance.onBack();
+
+    expect(backSpy).toHaveBeenCalled();
   });
 
   it('should have save button disabled when name is empty', async () => {

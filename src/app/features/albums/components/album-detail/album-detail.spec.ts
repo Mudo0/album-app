@@ -6,6 +6,7 @@ import { Album } from '../../../../core/models/album.model';
 import { Image } from '../../../../core/models/image.model';
 import { AlbumService } from '../../services/album.service';
 import { ImageService } from '../../../images/services/image.service';
+import { NavigationService } from '../../../../core/services/navigation.service';
 
 describe('AlbumDetail', () => {
   const mockAlbum: Album = {
@@ -206,10 +207,11 @@ describe('AlbumDetail', () => {
     expect(stickers[0].objectUrl).not.toBe(stickers[1].objectUrl);
   });
 
-  // ── Drag: semántica ACTUAL del componente (docs/fix-tests.md) ────────────
+  // ── Drag ──────────────────────────────────────────────────────────────────
   // onDragStarted solo setea z-index vía Renderer2 (sin signals = sin CD);
-  // onDragEnded usa event.distance (delta) + clamp contra el canvas y persiste
-  // el order por índice del array (que NO se reordena).
+  // onDragEnded usa event.distance (delta) + clamp contra el canvas y
+  // REORDENA el array moviendo el arrastrado al final (traer al frente) — el
+  // order persistido refleja el orden visual real y sobrevive al recargar.
 
   it('onDragStarted setea z-index sin reordenar ni mutar el array', async () => {
     const images = [
@@ -262,7 +264,7 @@ describe('AlbumDetail', () => {
     expect(updatePositionSpy).toHaveBeenCalledWith('img1', { x: 42, y: 77 });
   });
 
-  it('onDragEnded persiste el order por índice del array (sin reordenar)', async () => {
+  it('onDragEnded reordena el array moviendo el arrastrado al final (traer al frente)', async () => {
     const images = [
       createMockImage({ id: 'img1', position: { x: 10, y: 10 } }),
       createMockImage({ id: 'img2', position: { x: 20, y: 20 } }),
@@ -275,17 +277,42 @@ describe('AlbumDetail', () => {
     mockCanvasRect(fixture);
 
     const component = fixture.componentInstance as AlbumDetail;
-    const dragged = component.stickers()[0];
+    const dragged = component.stickers()[0]; // img1
 
-    // Sin delta: el order se persiste por índice del array SIN reordenar
+    // Sin delta: la posición no cambia, pero el arrastrado IGUAL se mueve al
+    // final del array → el order persistido refleja el apilamiento visual
     const dragEnd = { distance: { x: 0, y: 0 } } as unknown as CdkDragEnd;
     component.onDragEnded(dragged, dragEnd);
 
+    const after = component.stickers();
+    expect(after.map((s) => s.id)).toEqual(['img2', 'img3', 'img1']);
+    expect(after[2]).not.toBe(dragged); // nueva referencia => signal notifica CD
+    expect(after[2].x).toBe(10);
+    expect(after[2].y).toBe(10);
+    expect(dragged.x).toBe(10); // el objeto original NO se mutó
+    expect(updatePositionSpy).toHaveBeenCalledWith('img1', { x: 10, y: 10 });
+    // El order NUEVO refleja el array ya reordenado (arrastrado al final = arriba)
     expect(updateOrderSpy).toHaveBeenCalledWith([
-      { id: 'img1', order: 0 },
-      { id: 'img2', order: 1 },
-      { id: 'img3', order: 2 },
+      { id: 'img2', order: 0 },
+      { id: 'img3', order: 1 },
+      { id: 'img1', order: 2 },
     ]);
+  });
+
+  it('onBack delega al NavigationService centralizado', async () => {
+    getByIdSpy.mockResolvedValue(mockAlbum);
+    const fixture = createFixture();
+    fixture.detectChanges();
+    await flushAsync();
+
+    const component = fixture.componentInstance as AlbumDetail;
+    const backSpy = vi
+      .spyOn(TestBed.inject(NavigationService), 'back')
+      .mockImplementation(() => undefined);
+
+    component.onBack();
+
+    expect(backSpy).toHaveBeenCalled();
   });
 
   it('should revoke object URLs on destroy', async () => {

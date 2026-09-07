@@ -108,6 +108,19 @@ export class GalleryService {
           'Necesitás dar permiso para leer la galería.',
         );
       default:
+        // Errores de permisos sin code (p.ej. el "Missing the following
+        // permissions in AndroidManifest.xml" del framework de Capacitor, que
+        // llega como unknown) NO deben exponer el texto crudo del puente:
+        // se mapean a un accessDenied user-friendly.
+        if (
+          capacitorError?.message != null &&
+          capacitorError.message.includes('Missing the following permissions')
+        ) {
+          return new GalleryError(
+            'accessDenied',
+            'Necesitás dar permiso para leer la galería.',
+          );
+        }
         return new GalleryError(
           'unknown',
           capacitorError?.message ?? 'Error inesperado de la galería.',

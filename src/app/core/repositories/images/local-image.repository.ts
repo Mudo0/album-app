@@ -16,8 +16,19 @@ export class LocalImageRepository implements ImageRepository {
     return this.db.images.get(id);
   }
 
+  /**
+   * Última imagen = la de mayor `order`, NO la última del índice `albumId`
+   * (`.last()` recorre ese índice en orden de primary key → UUID aleatorio y
+   * podía devolver una imagen que no es la de arriba de todo, colisionando el
+   * próximo order al agregar). `sortBy('order')` ordena por el campo y
+   * `.at(-1)` toma el mayor.
+   */
   async getLastByAlbum(albumId: string): Promise<Image | undefined> {
-    return this.db.images.where('albumId').equals(albumId).last();
+    const images = await this.db.images
+      .where('albumId')
+      .equals(albumId)
+      .sortBy('order');
+    return images.at(-1);
   }
 
   async add(image: Image): Promise<void> {

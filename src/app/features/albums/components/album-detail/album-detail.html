@@ -1,5 +1,5 @@
 <header class="header">
-  <app-back-button />
+  <app-back-button (back)="onBack()" />
   <h1 class="title">{{ album()?.name ?? 'Cargando...' }}</h1>
   <div class="spacer"></div>
 </header>

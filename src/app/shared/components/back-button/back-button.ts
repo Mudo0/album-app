@@ -1,11 +1,18 @@
-import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
-import { NavigationService } from '../../../core/services/navigation.service';
+import { Component, ChangeDetectionStrategy, output } from '@angular/core';
 
+/**
+ * Botón de retroceso PRESENTACIONAL PURO: solo renderiza y emite `back`.
+ *
+ * NO inyecta navegación ni decide nada sobre hacia dónde volver: la regla de
+ * navegación la declara SIEMPRE el consumidor vía `(back)="onBack()"`. Esto
+ * elimina de raíz la fragilidad de depender de internals del output (si hay o
+ * no listeners conectados) — el botón se limita a reportar el gesto.
+ */
 @Component({
   selector: 'app-back-button',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: ` <button class="back" (click)="goBack()" aria-label="Volver">←</button> `,
+  template: ` <button class="back" (click)="back.emit()" aria-label="Volver">←</button> `,
   styles: `
     .back {
       width: 36px;
@@ -27,9 +34,6 @@ import { NavigationService } from '../../../core/services/navigation.service';
   `,
 })
 export class BackButton {
-  private readonly navigation = inject(NavigationService);
-
-  protected goBack(): void {
-    this.navigation.back();
-  }
+  /** Emitido al tocar el botón. El consumidor decide cómo volver. */
+  readonly back = output<void>();
 }

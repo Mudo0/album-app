@@ -51,6 +51,11 @@ export class NavigationService {
     this.router.navigateByUrl(`/albums/${albumId}`, { replaceUrl: true });
   }
 
+  /** Navega a la lista de álbumes reemplazando la pantalla transitiva actual */
+  toAlbumList(): void {
+    this.router.navigateByUrl('/albums', { replaceUrl: true });
+  }
+
   /** Destino determinístico según la jerarquía declarada por la ruta actual */
   private resolveBackUrl(): string {
     const leaf = this.currentLeaf();
