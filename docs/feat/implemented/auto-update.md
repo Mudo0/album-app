@@ -103,7 +103,7 @@ src/app/app.config.ts                                              (editar — p
 src/app/features/updates/update-dialog.ts|html|scss|spec.ts        (nuevo — UI diálogo + progreso)
 
 .github/workflows/build-apk.yml                                    (editar — Fase C1/C2: canales + changelog real)
-.github/workflows/build-dev.yml                                    (nuevo — Fase C3: build dev por push a dev)
+.github/workflows/build-dev.yml                                    (nuevo — Fase C3: build dev por push a develop)
 scripts/dev-version.js                                             (nuevo — numeración dev-v* con N+1 por etapa)
 docs/fix-tests.md                                                  (nuevo — bitácora de deuda de tests)
 ```
@@ -239,7 +239,7 @@ Hoy el `body` es genérico ("APK para la versión X…"). Para que el diálogo m
 #### C3. Workflow de dev (`build-dev.yml`) — iteración rápida en el celular
 **Archivos**: `.github/workflows/build-dev.yml` (nuevo), `scripts/dev-version.js` (nuevo)
 
-**Objetivo**: cada push a la rama `dev` publica un APK dev nuevo; la app en el celular lo detecta al volver a primer plano y te deja actualizar con un tap. Sin pasar por el flujo completo de release.
+**Objetivo**: cada push a la rama `develop` publica un APK dev nuevo; la app en el celular lo detecta al volver a primer plano y te deja actualizar con un tap. Sin pasar por el flujo completo de release.
 
 - **Trigger**: `on: push: branches: [dev]`. Permisos: `contents: write`. Concurrency: grupo por rama, cancel-in-progress.
 - **Pasos** (misma base que `build-apk.yml`): checkout → node/java/npm ci → **generar versión dev** → build Angular → `npx cap sync android` → `chmod +x gradlew` → firma (mismos secrets KEYSTORE_*) → `assembleRelease` → publicar release.
@@ -264,25 +264,31 @@ Hoy el `body` es genérico ("APK para la versión X…"). Para que el diálogo m
       GH_TOKEN: ${{ github.token }}
     run: |
       VERSION="${{ steps.version.outputs.version }}"
+      cat > notes.txt <<'EOF'
+      Build automático del push a develop (${{ github.sha }})
+
+      ${{ github.event.head_commit.message }}
+      EOF
       gh release create "$VERSION" \
         --repo "${{ github.repository }}" \
+        --target "${{ github.sha }}" \
         --title "Dev Build ${VERSION#dev-}" \
         --prerelease \
-        --notes "Build automático del push a dev (${{ github.sha }})"
+        --notes-file notes.txt
   ```
-  El tag `dev-v*` **NO** dispara el workflow principal (`v*` no matchea `dev-v0.0.0-alpha.5`), así que solo existe el release dev.
+  El tag `dev-v*` **NO** dispara el workflow principal (`v*` no matchea `dev-v0.0.0-alpha.5`), así que solo existe el release dev. El `--target` fija el tag al commit compilado (dev-version.js no crea tags git); el `--notes-file` evita todo escaping del mensaje de commit.
 - **Assets**: `album-app-dev.apk` (canónico) + `album-app-beta.2.apk` (por versión).
 
 **Flujo del usuario (el caso de uso que pediste)**:
 ```
-cambios → git push a dev → build-dev.yml numera "0.0.0-beta.2" (el último dev era beta.1)
+cambios → git push a develop → build-dev.yml numera "0.0.0-beta.2" (el último dev era beta.1)
   → release dev-v0.0.0-beta.2 publicado
   → abrís la app en el celular (o volvés a primer plano)
   → re-check (visibilitychange / appStateChange) → remota beta.2 > local → diálogo "Nueva versión disponible"
   → Actualizar ahora → descarga → instalar
 ```
 
-**AC**: cada push a `dev` publica el release `dev-v*` (prerelease, sin `latest`) con numeración semántica por etapa (`alpha.1, alpha.2… beta.1, beta.2…`); la versión remota es siempre mayor que la local anterior (`N+1` sobre el último publicado, o `N=1` al cambiar etapa/base); el tag `dev-v*` no dispara el workflow principal; si la consulta del último dev falla, el workflow falla **sin publicar**.
+**AC**: cada push a `develop` publica el release `dev-v*` (prerelease, sin `latest`) con numeración semántica por etapa (`alpha.1, alpha.2… beta.1, beta.2…`); la versión remota es siempre mayor que la local anterior (`N+1` sobre el último publicado, o `N=1` al cambiar etapa/base); el tag `dev-v*` no dispara el workflow principal; si la consulta del último dev falla, el workflow falla **sin publicar**. El release también se puede disparar manualmente con `workflow_dispatch` (input `ref`, default `develop`).
 
 ---
 
@@ -343,10 +349,12 @@ Nota de alcance (fase actual): sin pantalla de Settings todavía (solo albums/im
 ### Publicar build dev (iteración rápida, cero comandos manuales)
 
 ```
-git push origin dev
+git push origin develop
 ```
 
-`build-dev.yml` hace todo: numera `X.Y.Z` + etapa actual del `package.json` con `N+1` sobre el último build dev publicado (`N=1` si cambia la etapa/base), compila, y publica el release `dev-v0.0.0-beta.N`. La app la detectás en el celular al volver a primer plano.
+`build-dev.yml` hace todo: numera `X.Y.Z` + etapa actual del `package.json` con `N+1` sobre el último build dev publicado (`N=1` si cambia la etapa/base), compila, y publica el release `dev-v0.0.0-beta.N` (fijado al commit compilado con `--target`). La app la detectás en el celular al volver a primer plano.
+
+Para recompilar a mano sin pushear: **Actions → Compilar APK Dev → Run workflow** (input `ref`, default `develop`).
 
 ### Publicar release oficial (etapa alpha/beta/rc/estable)
 
