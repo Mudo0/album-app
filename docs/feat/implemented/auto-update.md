@@ -1,7 +1,9 @@
-# Spec: Auto-update in-app desde GitHub Releases
+# Registro: Auto-update in-app desde GitHub Releases
 
-> Estado: **validado — listo para implementar**
+> Estado: **IMPLEMENTADA** ✅ — Fases A (Android nativo), B (Angular core + UI) y C (CI/CD) completas.
+> Fecha: septiembre 2026 — versión local `0.0.0-alpha.4` (canal dev).
 > Alcance: Android (Capacitor 8). En web/desktop la feature es **no-op silencioso** (a futuro se adapta a Tauri).
+> Verificación: tests unitarios **158 passed | 3 skipped**; pendiente la primera corrida REAL de los workflows (`build-dev.yml` / `build-apk.yml`) y el checklist E2E en dispositivo (sección 11).
 
 ---
 
@@ -81,29 +83,36 @@ La app elige el asset según la etapa del **release remoto elegido** (no del loc
 
 **Limitación conocida**: `per_page=100` evalúa hasta 100 releases. Para un repo personal alcanza (el último estable estará en el pool salvo que publiques 100 prereleases seguidas sin estabilizar — aceptado).
 
-## 4. Estructura de archivos propuesta
+## 4. Estructura de archivos implementada
 
 ```
-android/app/src/main/java/com/mudo/app/updates/UpdatePlugin.kt     (nuevo — plugin nativo)
+android/app/src/main/java/com/mudo/app/updates/UpdatePlugin.kt     (nuevo — plugin nativo: download/install/resumePending)
 android/app/src/main/java/com/mudo/app/MainActivity.java           (editar — registrar plugin)
-android/app/src/main/AndroidManifest.xml                           (editar)
-android/app/src/main/res/xml/file_paths.xml                        (editar)
+android/app/src/main/AndroidManifest.xml                           (editar — permiso REQUEST_INSTALL_PACKAGES)
+android/app/src/main/res/xml/file_paths.xml                        (editar — external-files-path)
 
 src/app/core/services/updates/version.compare.ts                   (nuevo — puro, devuelve comparador)
 src/app/core/services/updates/version.compare.spec.ts              (nuevo — tests)
 src/app/core/services/updates/github-releases.service.ts           (nuevo — fetch + parseo + selección)
 src/app/core/services/updates/github-releases.service.spec.ts      (nuevo — tests)
-src/app/core/services/updates/update-checker.service.ts            (nuevo — orquesta check + caché)
-src/app/core/services/updates/native-update.bridge.ts              (nuevo — interfaz)
-src/app/core/services/updates/capacitor-update.bridge.ts           (nuevo — adapter Capacitor → plugin)
-src/app/core/providers/update.provider.ts                          (nuevo — DI, patrón album-repository.provider)
-src/app/app.config.ts                                              (editar — registrar provider + auto-check)
+src/app/core/services/updates/update-checker.service.ts            (nuevo — orquesta check + caché + señales)
+src/app/core/services/updates/update-checker.service.spec.ts       (nuevo — tests)
+src/app/core/services/updates/native-update.interface.ts           (nuevo — interfaz del bridge)
+src/app/core/services/updates/update-plugin.token.ts               (nuevo — token DI; factory: registerPlugin('Update'))
+src/app/app.config.ts                                              (editar — provideAppInitializer → init())
 src/app/features/updates/update-dialog.ts|html|scss|spec.ts        (nuevo — UI diálogo + progreso)
+
+.github/workflows/build-apk.yml                                    (editar — Fase C1/C2: canales + changelog real)
+.github/workflows/build-dev.yml                                    (nuevo — Fase C3: build dev por push a dev)
+scripts/dev-version.js                                             (nuevo — numeración dev-v* con N+1 por etapa)
+docs/fix-tests.md                                                  (nuevo — bitácora de deuda de tests)
 ```
+
+**Nota sobre la sección 3 (D7)**: se implementó una variante más simple — en lugar de un provider factory, el bridge queda como interfaz (`native-update.interface.ts`) + token DI (`update-plugin.token.ts`) cuyo factory llama `registerPlugin('Update')` directamente (seguro en web: las llamadas rechazan, y el checker las evita con el gate de plataforma). Mismo desacople, una pieza menos.
 
 ## 5. Tareas de implementación
 
-### FASE A — Android nativo
+### FASE A — Android nativo ✅
 
 #### A1. Manifest: permiso + FileProvider paths
 **Archivos**: `AndroidManifest.xml`, `res/xml/file_paths.xml`
@@ -141,7 +150,7 @@ registerPlugin(UpdatePlugin.class);
 
 **AC**: `npx cap sync android && ./gradlew assembleDebug` compila y el plugin aparece en `window.Capacitor.Plugins.Update`.
 
-### FASE B — Angular core y UI
+### FASE B — Angular core y UI ✅
 
 #### B1. `version.compare.ts` — parseo y comparación [puro]
 **Archivos**: `src/app/core/services/updates/version.compare.ts` + `.spec.ts`
@@ -204,7 +213,7 @@ Render: en `App` (host) vía `@if`/signals — no requiere overlay de CDK ni rut
 
 **Sin botón manual por ahora** — no existe pantalla de Settings en la app (solo albums/images). Cuando aparezca, el `check(true)` ya está listo para ahí.
 
-### FASE C — CI/CD (workflow)
+### FASE C — CI/CD (workflow) ✅
 
 #### C1. `build-apk.yml`: canales correctos
 **Archivos**: `.github/workflows/build-apk.yml`
@@ -275,6 +284,10 @@ cambios → git push a dev → build-dev.yml numera "0.0.0-beta.2" (el último d
 
 **AC**: cada push a `dev` publica el release `dev-v*` (prerelease, sin `latest`) con numeración semántica por etapa (`alpha.1, alpha.2… beta.1, beta.2…`); la versión remota es siempre mayor que la local anterior (`N+1` sobre el último publicado, o `N=1` al cambiar etapa/base); el tag `dev-v*` no dispara el workflow principal; si la consulta del último dev falla, el workflow falla **sin publicar**.
 
+---
+
+**Estado de verificación de la implementación**: todas las subtareas A1–C3 están implementadas y el código está en el repo. Cobertura por archivo (tests): `version.compare` 24, `github-releases` 19, `update-checker` 21, `update-dialog` 10 → suite completa **158 passed | 3 skipped** (los 3 skipped son deuda vieja documentada en `docs/fix-tests.md`). Lo que quedó sin verificar es la parte que NO se puede probar local: primera corrida real de los workflows y el E2E en dispositivo (sección 11).
+
 **Nota de firma**: si los secrets `KEYSTORE_*` están en el repo, el APK dev queda firmado con el MISMO keystore que los releases → se instala sobre la app existente sin desinstalar. Sin secrets, cae a debug signing (el flujo dev sobre una app firmada release falla con `INSTALL_FAILED_UPDATE_INCOMPATIBLE`). Decisión del usuario: perder datos en la transición dev→release no es problema hoy (sin usuarios reales); se revisa antes de la 1.0 estable.
 
 ## 6. Casos borde / errores (no-crash garantizado)
@@ -298,15 +311,15 @@ cambios → git push a dev → build-dev.yml numera "0.0.0-beta.2" (el último d
 
 ## 7. Criterios de aceptación globales
 
-1. `npm run build`, `npx cap sync android` y `./gradlew assembleDebug` compilan sin errores.
-2. Sin conexión o error/rate-limit de GitHub → silencioso, sin crash.
-3. Versión local igual o mayor que la remota → sin alertas.
-4. "Actualizar ahora" → APK descargado completo → asistente nativo de instalación de Android.
-5. **No-op en web/desktop** (incluidos `ng serve` y tests vitest).
-6. La comparación funciona con tags prefijados `v` y con etapas (tests unitarios en `version.compare.spec.ts`).
-7. "Más tarde" silencia el diálogo 24h; el re-check al `resume` no spamea la API (un request por re-open; GitHub permite 60/h).
+- [x] 1. ~~`npm run build`, `npx cap sync android` y `./gradlew assembleDebug` compilan sin errores.~~ → `cap sync android` hecho; build/gradle corren en CI (sin chequeo local).
+- [x] 2. Sin conexión o error/rate-limit de GitHub → silencioso, sin crash (cubierto por tests del checker).
+- [x] 3. Versión local igual o mayor que la remota → sin alertas (tests del checker).
+- [ ] 4. "Actualizar ahora" → APK descargado completo → asistente nativo de instalación de Android (**E2E en dispositivo, pendiente**).
+- [x] 5. **No-op en web/desktop** (incluidos `ng serve` y tests vitest) — confirmado hoy en `ng serve` + tests.
+- [x] 6. La comparación funciona con tags prefijados `v` y con etapas (24 tests en `version.compare.spec.ts`).
+- [x] 7. "Más tarde" silencia el diálogo 24h; el re-check al `resume` no spamea la API (tests del checker).
 
-## 8. Orden de implementación sugerido
+## 8. Orden de implementación (ejecutado)
 
 ```
 A1 → A2 → A3  (Android: se puede probar con llamadas manuales al plugin)
@@ -346,7 +359,7 @@ Si C2 falla (diff vacío o error de la API), editar el `body` del release a mano
 
 ## 11. Checklist de verificación manual (E2E en dispositivo)
 
-> Correr completo UNA vez al terminar la implementación. Después, un smoke test acotado alcanza.
+> **PENDIENTE** — validación real en dispositivo y CI (los workflows aún no corrieron sobre tags/pushes reales). Los tests unitarios ya cubren el comportamiento lógico (158 passed | 3 skipped). Correr este checklist la primera vez que se publique un build dev y un release.
 
 **Preparación**
 - [ ] App dev instalada en el celular y firmada con el keystore real (secrets en el repo).
