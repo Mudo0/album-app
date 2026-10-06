@@ -1,7 +1,7 @@
 # Deuda técnica — fixes de tests
 
 > **Fecha**: 2026-09-06 · **Quién lo detectó**: durante B5 (UpdateDialog) del auto-update
-> **Estado**: resuelto — fixes mínimos (06/09) + arreglos de fondo (P1/P2/P3, 07/09) + flake del checker (P4, 07/09). Suite 161/161 verde (6/6 corridas estables post-fix).
+> **Estado**: resuelto — fixes mínimos (06/09) + arreglos de fondo (P1/P2/P3, 07/09) + flake del checker (P4, 07/09) + flake del doble gatillo / config muerta (P5, 06/10). Suite 193/193 verde (20/20 corridas estables post-fix).
 
 Cuando se corrió `ng test` (builder `@angular/build:unit-test`) por primera vez con la suite de
 auto-update, el build global del test suite estaba caído por errores PREEXISTENTES (no del
@@ -164,26 +164,79 @@ orden de carga del bundler (a diferencia del `vi.mock`, que era una carrera de c
 **Se MANTIENE** `vi.mock('@capacitor/app')`: es el ÚNICO consumer de `@capacitor/app` en la suite,
 no hay chunk real con el que compita, y el listener capturado permite disparar `appStateChange`
 manualmente (ningún camino para hacer eso con el web plugin real).
+> ⚠️ ESTA PREMISA QUEDÓ OBSOLETA — ver RESUELTO 5 (06/10): `image-uploader.spec.ts` y
+> `permission-required.spec.ts` sumaron su propio `vi.mock('@capacitor/app')` (más tarde, en la
+> feature de la galería) y `image-uploader.ts`/`permission-required.ts` importan el módulo REAL.
+> Eso reabrió la carrera de chunks → flake del "doble gatillo". El `vi.mock` por archivo de
+> `@capacitor/app` ya NO se mantiene: ahora es un mock ÚNICO en setup file + `isolate:true`.
 
 **Verificación**: checker aislado 64/64 + suite completa 161/161 en 6/6 corridas consecutivas
 post-fix. Antes del fix, 2/12 corridas fallaban.
 
 **Regla operativa**: en un spec, NUNCA `vi.mock` de un módulo de Capacitor que OTRA spec use real
-en la suite — usar `vi.spyOn` sobre el método del objeto real (patrón del repo).
+en la suite — usar `vi.spyOn` sobre el método del objeto real (patrón del repo). Para
+`@capacitor/app` (múltiples consumers reales y Proxy que impide el spyOn), ver RESUELTO 5.
+
+---
+
+## RESUELTO 5 (flake) — "doble gatillo" intermitente; `vitest.config.ts` era config muerta (2026-10-06)
+
+**Síntoma**: `update-checker.service.spec.ts` → `appStateChange isActive (post cold-start) → re-check
+(doble gatillo)` fallaba ~4 de ~14 corridas full-suite, SIEMPRE verde en aislamiento (10/10 con
+`--filter "doble gatillo"`). Firma: `expected "vi.fn()" to be called 2 times, but got 1 times`
+(el listener de `appStateChange` nunca disparaba la 2ª llamada a `github.check`).
+
+**Causa raíz 1 — config muerta**: `vitest.config.ts` (con `pool: 'threads'`, `testTimeout: 15000`)
+NUNCA se aplicaba a `ng test`: el builder `@angular/build:unit-test` con `runnerConfig: true`
+solo busca `vitest-base.config.*`. Se apunta con ruta explícita en `angular.json`:
+`"runnerConfig": "vitest.config.ts"` (+ `setupFiles`).
+
+**Causa raíz 2 — carrera de chunks (evidencia)**: la premisa de P4 quedó obsoleta (ver el bloque
+tachado arriba). Con `isolate: false` el builder bundlea los specs en chunks compartidos y el
+`vi.mock('@capacitor/app')` por archivo se degradaba según el orden de evaluación del worker —
+el mismo mecanismo de P4, ahora con `@capacitor/app` y 3 consumers reales.
+
+**Fix (determinista)**:
+1. **Mock central**: `src/test/capacitor-app.mock.ts` (nuevo) registra UN solo `vi.mock('@capacitor/app')`
+   como setup file. Se aplica ANTES de evaluar cualquier spec → el módulo mockeado es el único
+   posible en el worker. Los 3 specs leen el registro vía `globalThis.__capacitorAppMock__`
+   (solo `import type` del setup: importarlo con valor re-registraría el mock por archivo).
+2. **`isolate: true`** (`vitest.config.ts`): cada spec con su propio registro de módulos y su
+   propio `globalThis` — sin esto, el registro global compartido se pisaba entre specs en
+   paralelo (el `reset()` del `beforeEach` de un archivo borraba los listeners de otro).
+
+**Tradeoff**: la suite pasa de ~10s a ~25-30s. Aceptado: CI corre tests solo en el build de APK;
+`isolate:false` + 3 consumers reales del módulo no puede ser determinista sin un refactor grande
+de DI (inyectar `App` por token en los 3 consumers).
+
+**Verificación**: suite completa 193/193 en 20/20 corridas consecutivas (14 con `isolate:true` +
+6 con mock central post-fix). El archivo solo (antes del mock central) también 6/6 — el flake
+requería la suite completa.
+
+**Regla operativa (actualizada para `@capacitor/app`)**: NUNCA `vi.mock` de `@capacitor/app` por
+archivo — hay 3 consumers REALES (update-checker.service, image-uploader, permission-required).
+El mock vive ÚNICAMENTE en el setup file registrado en `angular.json` y `vitest.config.ts`. El
+`vi.spyOn` no aplica acá: los plugins de Capacitor son Proxies (`The property 'addListener' is
+not defined on the object`).
 
 ---
 
 ## Cómo verificar
 
 ```bash
-npm test                          # suite completa: 161 passed | 0 skipped | 0 failed
-npx vitest run src/app/core/services/updates --pool=forks   # specs puros del auto-update: 64 verdes
+npm test                          # suite completa: 193 passed | 0 skipped | 0 failed (~25-30s)
 ```
+
+> `npx vitest run` directo NO es un camino soportado: vitest suelto no tiene el transform de
+> Angular (TestBed sin inicializar → ~118 fail). El único plugin viable (analogjs/vite-plugin-angular)
+> es rechazado por npm por peer conflict con `@angular-devkit/build-angular`. Verificar SIEMPRE
+> con `npm test` (= `ng test --no-watch`).
 
 ## Estado final esperado
 
-- [x] Suite compila y corre (16 archivos, 161 passed, 0 skipped)
+- [x] Suite compila y corre (18 archivos, 193 passed, 0 skipped)
 - [x] PENDIENTE 1: mock de `getContext` tipado "bien" (vi.spyOn + restore, 2026-09-07)
 - [x] PENDIENTE 2: reescribir los 3 tests de drag a la semántica actual (2026-09-07)
 - [x] PENDIENTE 3: investigar el llamado del checker en el entorno de test (2026-09-07)
 - [x] PENDIENTE 4 (flake): mock de `@capacitor/core` degradado en el bundle → spyOn (2026-09-07)
+- [x] PENDIENTE 5 (flake): doble gatillo intermitente → mock central de `@capacitor/app` + `isolate:true` (2026-10-06)
