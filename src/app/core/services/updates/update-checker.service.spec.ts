@@ -12,22 +12,16 @@ import type { UpdatePluginInterface } from './native-update.interface';
 //   (patrón del repo, ver image-uploader.spec) — NO vi.mock del módulo, porque
 //   el bundler comparte @capacitor/core con specs que lo usan real y el mock a
 //   veces se degrada (flake: 18 tests caídos en bloque).
-// - App (appStateChange): vi.mock estable — es el ÚNICO consumer de
-//   @capacitor/app; el listener se captura para dispararlo manualmente
-//   (equivalente a volver de background).
+// - App (appStateChange): mock ÚNICO centralizado en src/test/capacitor-app.mock.ts
+//   (setup file). Varios specs YA usan @capacitor/app real → un vi.mock por spec
+//   se degradaba por orden de chunks (flake "doble gatillo"). Registrado como
+//   setup, se aplica ANTES de los specs: el listener se dispara vía el registro
+//   global (equivalente a volver de background).
 
-const { appStateListeners } = vi.hoisted(() => ({
-  appStateListeners: [] as Array<(data: { isActive: boolean }) => void>,
-}));
-
-vi.mock('@capacitor/app', () => ({
-  App: {
-    addListener: vi.fn((_event: string, cb: (data: { isActive: boolean }) => void) => {
-      appStateListeners.push(cb);
-      return Promise.resolve({ remove: vi.fn() });
-    }),
-  },
-}));
+/** Accessor al registro del mock central de @capacitor/app (setup file). */
+function appMock() {
+  return globalThis.__capacitorAppMock__;
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -60,7 +54,7 @@ function createService(plugin = pluginMock(), github = githubMock()) {
 
 beforeEach(() => {
   vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
-  appStateListeners.length = 0;
+  appMock().reset();
   localStorage.clear();
   vi.clearAllMocks();
 });
@@ -366,7 +360,7 @@ describe('UpdateCheckerService — init y re-check', () => {
       // pasar la ventana inicial (el init ya hizo el check)
       await vi.advanceTimersByTimeAsync(2100);
 
-      appStateListeners.forEach((cb) => cb({ isActive: true }));
+      appMock().appState.forEach((cb) => cb({ isActive: true }));
 
       // el re-check llama a la API de nuevo aunque haya caché fresca (D6: no gate)
       await vi.advanceTimersByTimeAsync(0);

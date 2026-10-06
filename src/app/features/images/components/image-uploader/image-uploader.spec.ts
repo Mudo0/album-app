@@ -10,32 +10,15 @@ import type { GalleryMedia } from '../../../../core/interfaces/gallery-plugin.in
 
 // ── Mock de @capacitor/app ─────────────────────────────────────────────────
 // El picker registra listeners de appStateChange (re-check al primer plano) y
-// backButton (gesto físico de Android) en ngOnInit. El mock captura los
-// callbacks para dispararlos manualmente en los tests y las handles para
-// verificar el cleanup en ngOnDestroy.
-const { appListeners } = vi.hoisted(() => ({
-  appListeners: {
-    appState: [] as Array<(data: { isActive: boolean }) => void>,
-    backButton: [] as Array<() => void>,
-    handles: [] as Array<{ remove: ReturnType<typeof vi.fn> }>,
-  },
-}));
+// backButton (gesto físico de Android) en ngOnInit. El mock se centraliza en
+// src/test/capacitor-app.mock.ts (setup file, registro ÚNICO): captura los
+// callbacks en globalThis.__capacitorAppMock__ para dispararlos manualmente en
+// los tests y las handles para verificar el cleanup en ngOnDestroy.
 
-vi.mock('@capacitor/app', () => ({
-  App: {
-    addListener: vi.fn((event: string, cb: unknown) => {
-      const handle = { remove: vi.fn() };
-      appListeners.handles.push(handle);
-      if (event === 'appStateChange') {
-        appListeners.appState.push(cb as (data: { isActive: boolean }) => void);
-      }
-      if (event === 'backButton') {
-        appListeners.backButton.push(cb as () => void);
-      }
-      return Promise.resolve(handle);
-    }),
-  },
-}));
+/** Accessor al registro del mock central de @capacitor/app (setup file). */
+function appMock() {
+  return globalThis.__capacitorAppMock__;
+}
 
 describe('ImageUploader', () => {
   function createMedia(id: string): GalleryMedia {
@@ -81,9 +64,7 @@ describe('ImageUploader', () => {
     navigationToAlbumListSpy = vi.fn();
 
     blobCounter = 0;
-    appListeners.appState.length = 0;
-    appListeners.backButton.length = 0;
-    appListeners.handles.length = 0;
+    appMock().reset();
     createObjectURLSpy = vi.fn(() => `blob:fake-${blobCounter++}`);
     revokeObjectURLSpy = vi.fn();
     // jsdom no implementa createObjectURL/revokeObjectURL de verdad
@@ -549,7 +530,7 @@ describe('ImageUploader', () => {
     // El usuario otorgó en settings → el próximo check devuelve granted
     checkPermissionsSpy.mockResolvedValue({ mediaLibrary: 'granted', storageLegacy: 'granted' });
 
-    appListeners.appState[appListeners.appState.length - 1]({ isActive: true });
+    appMock().appState[appMock().appState.length - 1]({ isActive: true });
     await flush();
     fixture.detectChanges();
 
@@ -587,7 +568,7 @@ describe('ImageUploader', () => {
     expect(component.permission()).toBe('granted');
     const callsBefore = checkPermissionsSpy.mock.calls.length;
 
-    appListeners.appState[appListeners.appState.length - 1]({ isActive: true });
+    appMock().appState[appMock().appState.length - 1]({ isActive: true });
     await flush();
 
     // Concedido: el re-check no re-corre (no recarga la galería al volver)
@@ -666,8 +647,8 @@ describe('ImageUploader', () => {
     await flush();
     fixture.detectChanges();
 
-    expect(appListeners.backButton.length).toBeGreaterThan(0);
-    appListeners.backButton[appListeners.backButton.length - 1]();
+    expect(appMock().backButton.length).toBeGreaterThan(0);
+    appMock().backButton[appMock().backButton.length - 1]();
 
     expect(navigationToAlbumListSpy).toHaveBeenCalled();
     expect(navigationBackSpy).not.toHaveBeenCalled();
@@ -678,12 +659,12 @@ describe('ImageUploader', () => {
     fixture.detectChanges();
     await flush();
 
-    expect(appListeners.handles.length).toBeGreaterThan(0);
+    expect(appMock().handles.length).toBeGreaterThan(0);
 
     fixture.destroy();
     await flush();
 
-    for (const handle of appListeners.handles) {
+    for (const handle of appMock().handles) {
       expect(handle.remove).toHaveBeenCalled();
     }
   });

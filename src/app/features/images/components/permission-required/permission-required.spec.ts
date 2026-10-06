@@ -11,21 +11,14 @@ import { GalleryService } from '../../../../core/services/gallery.service';
 
 // ── Mock de @capacitor/app ─────────────────────────────────────────────────
 // La pantalla registra el listener de appStateChange (re-check al volver de
-// Settings) en ngOnInit. El mock captura el callback para dispararlo a mano.
-const { appStateListeners } = vi.hoisted(() => ({
-  appStateListeners: [] as Array<(data: { isActive: boolean }) => void>,
-}));
+// Settings) en ngOnInit. El mock se centraliza en src/test/capacitor-app.mock.ts
+// (setup file, registro ÚNICO): captura el callback en globalThis para
+// dispararlo a mano.
 
-vi.mock('@capacitor/app', () => ({
-  App: {
-    addListener: vi.fn((event: string, cb: (data: { isActive: boolean }) => void) => {
-      if (event === 'appStateChange') {
-        appStateListeners.push(cb);
-      }
-      return Promise.resolve({ remove: vi.fn() });
-    }),
-  },
-}));
+/** Accessor al registro del mock central de @capacitor/app (setup file). */
+function appMock() {
+  return globalThis.__capacitorAppMock__;
+}
 
 describe('PermissionRequired', () => {
   let checkPermissionsSpy: ReturnType<typeof vi.fn>;
@@ -45,7 +38,7 @@ describe('PermissionRequired', () => {
     navigationToAlbumListSpy = vi.fn();
     navigationToAlbumDetailSpy = vi.fn();
 
-    appStateListeners.length = 0;
+    appMock().reset();
     vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
 
     TestBed.resetTestingModule();
@@ -183,7 +176,7 @@ describe('PermissionRequired', () => {
       mediaLibrary: 'granted',
       storageLegacy: 'granted',
     });
-    appStateListeners[appStateListeners.length - 1]({ isActive: true });
+    appMock().appState[appMock().appState.length - 1]({ isActive: true });
     await flush();
     fixture.detectChanges();
 
