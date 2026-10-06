@@ -68,7 +68,8 @@ describe('PermissionRequired', () => {
           },
         },
       ],
-    }).compileComponents();
+    });
+    await TestBed.compileComponents();
   });
 
   afterEach(() => {
