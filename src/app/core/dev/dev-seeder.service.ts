@@ -47,7 +47,7 @@ export class DevSeederService {
       // Portada = primera imagen, mismo campo que setea el flujo real
       await this.albumService.updateFull({ ...album, coverImageId: firstImageId });
     } catch (error) {
-      console.warn('[dev-seeder] Falló la siembra de datos de prueba:', error);
+
     }
   }
 
