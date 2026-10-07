@@ -1,3 +1,4 @@
+import { InjectionToken } from '@angular/core';
 import { Album } from '../../models/album.model';
 
 export interface AlbumRepository {
@@ -7,3 +8,5 @@ export interface AlbumRepository {
   update(album: Album, changes?: Partial<Album>): Promise<void>;
   delete(id: string): Promise<void>;
 }
+
+export const ALBUM_REPOSITORY = new InjectionToken<AlbumRepository>('ALBUM_REPOSITORY');

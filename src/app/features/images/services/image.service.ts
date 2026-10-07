@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 import { Image } from '../../../core/models/image.model';
 
-import { IMAGE_REPOSITORY } from '../../../core/tokens/image-repository.token';
+import { IMAGE_REPOSITORY } from '../../../core/interfaces/repositories/image.repository';
 import { Position } from '../../../core/models/position.model';
 import { GalleryService } from '../../../core/services/gallery.service';
 import { ClipboardService } from '../../../core/services/clipboard.service';

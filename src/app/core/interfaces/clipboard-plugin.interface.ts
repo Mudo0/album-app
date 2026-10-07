@@ -1,3 +1,6 @@
+import { InjectionToken } from '@angular/core';
+import { registerPlugin } from '@capacitor/core';
+
 export interface ClipboardPluginInterface {
   /**
    * Copia una imagen nativa al portapapeles del sistema.
@@ -14,3 +17,16 @@ export interface ClipboardPluginInterface {
     quality?: number;
   }): Promise<{ success: boolean }>;
 }
+
+/**
+ * Token del plugin nativo Clipboard. En tests se provee un mock con useValue;
+ * en runtime el factory registra el plugin real (registerPlugin es seguro
+ * aunque el plugin nativo no exista, p.ej. en web: las llamadas rechazan).
+ */
+export const CLIPBOARD_PLUGIN = new InjectionToken<ClipboardPluginInterface>(
+  'ClipboardPlugin',
+  {
+    providedIn: 'root',
+    factory: () => registerPlugin<ClipboardPluginInterface>('Clipboard'),
+  },
+);

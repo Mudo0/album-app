@@ -1,3 +1,4 @@
+import { InjectionToken } from '@angular/core';
 import { Image } from '../../models/image.model';
 import { Position } from '../../models/position.model';
 
@@ -10,3 +11,5 @@ export interface ImageRepository {
   updateOrder(updates: Array<{ id: string; order: number }>): Promise<void>;
   delete(id: string): Promise<void>;
 }
+
+export const IMAGE_REPOSITORY = new InjectionToken<ImageRepository>('IMAGE_REPOSITORY');

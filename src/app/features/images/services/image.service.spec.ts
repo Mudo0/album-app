@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { ImageService, ALBUM_THUMB_SIZE } from './image.service';
-import { IMAGE_REPOSITORY } from '../../../core/tokens/image-repository.token';
+import { IMAGE_REPOSITORY } from '../../../core/interfaces/repositories/image.repository';
 import { GalleryService } from '../../../core/services/gallery.service';
 import { ClipboardService } from '../../../core/services/clipboard.service';
 import type { GalleryMedia } from '../../../core/interfaces/gallery-plugin.interface';

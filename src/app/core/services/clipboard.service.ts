@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { CLIPBOARD_PLUGIN } from '../tokens/clipboard-plugin.token';
+import { CLIPBOARD_PLUGIN } from '../interfaces/clipboard-plugin.interface';
 import type { ClipboardPluginInterface } from '../interfaces/clipboard-plugin.interface';
 
 /**

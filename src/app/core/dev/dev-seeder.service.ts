@@ -2,7 +2,7 @@ import { Injectable, inject, isDevMode } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 
 import { AlbumService } from '../../features/albums/services/album.service';
-import { IMAGE_REPOSITORY } from '../tokens/image-repository.token';
+import { IMAGE_REPOSITORY } from '../interfaces/repositories/image.repository';
 import { Image } from '../models/image.model';
 
 /** Marca en localStorage: el seed corre UNA sola vez por navegador. */

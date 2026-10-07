@@ -1,3 +1,5 @@
+import { InjectionToken } from '@angular/core';
+import { registerPlugin } from '@capacitor/core';
 import type { GalleryMedia } from '../models/gallery-media.model';
 import type { MediaResult } from '../models/media-result.model';
 import type { MediaPermissions } from '../models/media-permissions.model';
@@ -38,3 +40,13 @@ export interface GalleryPluginInterface {
   /** Abre el panel de permisos de la app en Settings (estado 'denied' permanente). */
   openGallerySettings(): Promise<void>;
 }
+
+/**
+ * Token del plugin nativo Gallery. En tests se provee un mock con useValue;
+ * en runtime el factory registra el plugin real (registerPlugin es seguro
+ * aunque el plugin nativo no exista, p.ej. en web: las llamadas rechazan).
+ */
+export const GALLERY_PLUGIN = new InjectionToken<GalleryPluginInterface>('GalleryPlugin', {
+  providedIn: 'root',
+  factory: () => registerPlugin<GalleryPluginInterface>('Gallery'),
+});

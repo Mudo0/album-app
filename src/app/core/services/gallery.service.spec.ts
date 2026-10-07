@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { GalleryService, GalleryError } from './gallery.service';
-import { GALLERY_PLUGIN } from '../tokens/gallery-plugin.token';
+import { GALLERY_PLUGIN } from '../interfaces/gallery-plugin.interface';
 import type { GalleryPluginInterface } from '../interfaces/gallery-plugin.interface';
 
 describe('GalleryService', () => {

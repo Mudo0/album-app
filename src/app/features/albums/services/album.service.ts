@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { ALBUM_REPOSITORY } from '../../../core/tokens/album-repository.token';
+import { ALBUM_REPOSITORY } from '../../../core/interfaces/repositories/album.repository';
 import { Album } from '../../../core/models/album.model';
 
 @Injectable({ providedIn: 'root' })

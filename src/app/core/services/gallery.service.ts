@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { GALLERY_PLUGIN } from '../tokens/gallery-plugin.token';
+import { GALLERY_PLUGIN } from '../interfaces/gallery-plugin.interface';
 import type {
   GalleryResponse,
   MediaPermissions,
