@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { LocalImageRepository } from './local-image.repository';
-import { LocalDbContext } from '../../services/LocalDbContext';
+import { LocalDbContext } from '../../services/local-db.context';
 import type { Image } from '../../models/image.model';
 
 describe('LocalImageRepository', () => {

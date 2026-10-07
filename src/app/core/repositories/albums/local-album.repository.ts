@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { AlbumRepository } from '../../interfaces/repositories/album.repository';
 import { Album } from '../../models/album.model';
-import { LocalDbContext } from '../../services/LocalDbContext';
+import { LocalDbContext } from '../../services/local-db.context';
 
 @Injectable({ providedIn: 'root' })
 export class LocalAlbumRepository implements AlbumRepository {

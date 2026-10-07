@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Image } from '../../models/image.model';
-import { LocalDbContext } from '../../services/LocalDbContext';
+import { LocalDbContext } from '../../services/local-db.context';
 import { ImageRepository } from '../../interfaces/repositories/image.repository';
 import { Position } from '../../models/position.model';
 

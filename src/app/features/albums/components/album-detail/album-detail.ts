@@ -20,7 +20,7 @@ import { AlbumService } from '../../services/album.service';
 
 import { BackButton } from '../../../../shared/components/back-button/back-button';
 import { ImageService } from '../../../images/services/image.service';
-import { StickerImage, StickerBounds } from '../../../../core/models/stickerImage.viewModel';
+import { StickerImage, StickerBounds } from '../../../../core/models/sticker-image.view-model';
 import { LongPressDirective, LongPressPosition } from '../../../../shared/directives/long-press';
 import { NavigationService } from '../../../../core/services/navigation.service';
 

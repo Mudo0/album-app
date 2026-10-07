@@ -1,8 +1,9 @@
 import { Injectable, inject, isDevMode } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 
-import { AlbumService } from '../../features/albums/services/album.service';
+import { ALBUM_REPOSITORY } from '../interfaces/repositories/album.repository';
 import { IMAGE_REPOSITORY } from '../interfaces/repositories/image.repository';
+import { Album } from '../models/album.model';
 import { Image } from '../models/image.model';
 
 /** Marca en localStorage: el seed corre UNA sola vez por navegador. */
@@ -19,7 +20,7 @@ const TEST_IMAGE_SIZE = 512;
  *
  * En desktop no se puede cargar imágenes (la galería es un plugin nativo),
  * así que este servicio genera placeholders con canvas y los persiste por la
- * misma puerta que el flujo real: AlbumService + IMAGE_REPOSITORY (Dexie).
+ * misma puerta que el flujo real: ALBUM_REPOSITORY + IMAGE_REPOSITORY (Dexie).
  *
  * Guardas: solo corre con isDevMode() + plataforma web + una única vez por
  * navegador (flag en localStorage). Borrar la key 'dev:album-seeded-v1'
@@ -27,7 +28,7 @@ const TEST_IMAGE_SIZE = 512;
  */
 @Injectable({ providedIn: 'root' })
 export class DevSeederService {
-  private readonly albumService = inject(AlbumService);
+  private readonly albumRepository = inject(ALBUM_REPOSITORY);
   private readonly imageRepo = inject(IMAGE_REPOSITORY);
 
   async seedOnceForDev(): Promise<void> {
@@ -41,11 +42,18 @@ export class DevSeederService {
     localStorage.setItem(SEED_FLAG, '1');
 
     try {
-      const album = await this.albumService.create({ name: 'Álbum de prueba' });
+      const now = new Date();
+      const album: Album = {
+        name: 'Álbum de prueba',
+        id: crypto.randomUUID(),
+        createdAt: now,
+        updatedAt: now,
+      };
+      await this.albumRepository.create(album);
       const firstImageId = await this.seedImages(album.id);
 
       // Portada = primera imagen, mismo campo que setea el flujo real
-      await this.albumService.updateFull({ ...album, coverImageId: firstImageId });
+      await this.albumRepository.update({ ...album, coverImageId: firstImageId });
     } catch (error) {
 
     }

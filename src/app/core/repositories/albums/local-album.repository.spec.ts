@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { LocalAlbumRepository } from './local-album.repository';
-import { LocalDbContext } from '../../services/LocalDbContext';
+import { LocalDbContext } from '../../services/local-db.context';
 import type { Album } from '../../models/album.model';
 
 describe('LocalAlbumRepository', () => {
