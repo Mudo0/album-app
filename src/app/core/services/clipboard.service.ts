@@ -1,6 +1,5 @@
 import { Injectable, inject } from '@angular/core';
 import { CLIPBOARD_PLUGIN } from '../interfaces/clipboard-plugin.interface';
-import type { ClipboardPluginInterface } from '../interfaces/clipboard-plugin.interface';
 
 /**
  * Servicio wrapper del plugin nativo Clipboard.

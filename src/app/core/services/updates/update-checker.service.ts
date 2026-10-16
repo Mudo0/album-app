@@ -19,7 +19,6 @@ import {
   Inject,
   Injectable,
   computed,
-  inject,
   signal,
 } from '@angular/core';
 import { Capacitor } from '@capacitor/core';

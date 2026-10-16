@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { UpdateDialog } from './features/updates/update-dialog';
 
@@ -7,5 +7,6 @@ import { UpdateDialog } from './features/updates/update-dialog';
   imports: [RouterOutlet, UpdateDialog],
   templateUrl: './app.html',
   styleUrl: './app.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class App {}

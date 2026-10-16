@@ -229,7 +229,7 @@ describe('AlbumDetail', () => {
     const dragged = before[0];
     const event = dragStartMock();
 
-    component.onDragStarted(dragged, event);
+    component.onDragStarted(event);
 
     const after = component.stickers();
     expect(after).toEqual(before); // ni reordena ni muta
