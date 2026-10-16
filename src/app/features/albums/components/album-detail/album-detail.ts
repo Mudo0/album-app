@@ -88,7 +88,7 @@ export class AlbumDetail implements OnInit, OnDestroy {
    * NO reordena el array stickers() acá, porque triggers CD durante drag
    * y CDK's setFreeDragPosition() resetea _activeTransform a {0,0}.
    */
-  onDragStarted(sticker: StickerImage, event: CdkDragStart): void {
+  onDragStarted(event: CdkDragStart): void {
     this.isDragging = true;
     this.closeContextMenu();
     this.maxZIndex++;
@@ -189,8 +189,6 @@ export class AlbumDetail implements OnInit, OnDestroy {
       const canvas = this.hostEl.nativeElement.querySelector('.canvas');
       if (canvas) {
         const canvasRect = canvas.getBoundingClientRect();
-        const canvasHeight = canvasRect.height;
-        const canvasWidth = canvasRect.width;
 
         // Centrado horizontalmente sobre el sticker
         x = canvasRect.left + bounds.x + (bounds.width - menuWidth) / 2;

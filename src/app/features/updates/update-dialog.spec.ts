@@ -8,7 +8,7 @@ import { signal } from '@angular/core';
 import { UpdateDialog } from './update-dialog';
 import { UpdateCheckerService } from '../../core/services/updates/update-checker.service';
 import type { UpdateInfo } from '../../core/services/updates/github-releases.service';
-import type { CheckState, DownloadState } from '../../core/services/updates/update-checker.service';
+import type { DownloadState } from '../../core/services/updates/update-checker.service';
 
 const INFO: UpdateInfo = {
   version: '1.0.1',

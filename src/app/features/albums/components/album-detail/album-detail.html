@@ -35,7 +35,7 @@
           cdkDrag
           cdkDragBoundary=".canvas"
           [cdkDragFreeDragPosition]="{ x: sticker.x, y: sticker.y }"
-          (cdkDragStarted)="onDragStarted(sticker, $event)"
+          (cdkDragStarted)="onDragStarted($event)"
           (cdkDragEnded)="onDragEnded(sticker, $event)"
           appLongPress
           [appLongPressDisabled]="isDragging"
