@@ -1,71 +1,71 @@
 <!--
-NOTA: Si alguna sección no aplica a este cambio (por ejemplo, no hay issue asociado,
-no hay riesgos o no requiere pruebas), bórrala directamente antes de crear el PR.
+NOTE: If a section doesn't apply to this change (e.g., no associated issue,
+no risks, or no tests required), delete it before creating the PR.
 -->
 
-## Descripción
+## Description
 
-<!-- Explica brevemente qué cambios introduce este PR y el motivo del cambio -->
+<!-- Briefly explain what changes this PR introduces and why -->
 
-## Ticket / Issue relacionado
+## Related Ticket / Issue
 
-Closes #<!-- Número de issue o link a Jira, Trello, etc. -->
+Closes #<!-- Issue number or link to Jira, Trello, etc. -->
 
-## Tipo de cambio
+## Change Type
 
-- [ ] Corrección de error (Bug fix)
-- [ ] Nueva funcionalidad (Feature)
-- [ ] Refactorización o deuda técnica
-- [ ] Actualización de dependencias / configuración / documentación
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Refactoring or technical debt
+- [ ] Dependencies / configuration / documentation update
 
-## Archivos clave modificados
+## Key Files Changed
 
-<!-- Enumera los archivos principales o módulos tocados y el motivo si no es evidente -->
+<!-- List the main files or modules touched and the reason if not obvious -->
 
-- `ruta/al/archivo_o_modulo`: <!-- breve detalle del cambio -->
+- `path/to/file_or_module`: <!-- brief detail of the change -->
 
 ---
 
-<!-- de ser bugfix agregar: -->
+<!-- if bugfix, add: -->
 
-## Causa raíz (Root Cause)
+## Root Cause
 
-<!-- ¿Qué causaba el error y bajo qué condiciones específicas ocurría? -->
+<!-- What caused the error and under what specific conditions did it occur? -->
 
-## Solución implementada
+## Solution Implemented
 
-<!-- ¿Cómo se solucionó el problema en el código? -->
+<!-- How was the problem fixed in the code? -->
 
-## Pasos para reproducir y verificar
+## Steps to Reproduce and Verify
 
-### Antes del fix (Comportamiento esperado del error)
+### Before the Fix (Expected Error Behavior)
 
-<!-- Cómo reproducir el fallo original -->
+<!-- How to reproduce the original failure -->
 
-### Después del fix (Validación)
+### After the Fix (Validation)
 
-<!-- Cómo verificar que el error ya no ocurre -->
+<!-- How to verify the error no longer occurs -->
 
 ---
 
-## Riesgos y observaciones
+## Risks and Observations
 
-<!-- Detalla aspectos críticos como:
-- Breaking changes (cambios que rompen compatibilidad en APIs, DB, etc.)
-- Cambios bloqueantes para el deploy (migraciones pendientes, variables de entorno nuevas)
-- Riesgos de concurrencia, rendimiento o seguridad
+<!-- Detail critical aspects such as:
+- Breaking changes (changes that break compatibility in APIs, DB, etc.)
+- Blockers for deploy (pending migrations, new environment variables)
+- Concurrency, performance, or security risks
 -->
 
-- **¿Introduce breaking change?**: [ ] Sí / [ ] No
-- **Observaciones**:
+- **Introduces breaking change?**: [ ] Yes / [ ] No
+- **Observations**:
 
 ## Checklist
 
-- [ ] He revisado mi propio código antes de solicitar review.
-- [ ] Añadí o actualicé pruebas unitarias / de integración.
-- [ ] Todas las pruebas locales pasan con éxito.
-- [ ] Se documentaron nuevas variables de entorno o configuraciones necesarias.
+- [ ] I reviewed my own code before requesting review.
+- [ ] I added or updated unit / integration tests.
+- [ ] All local tests pass successfully.
+- [ ] New environment variables or required configurations were documented.
 
-## Instrucciones de prueba / Screenshots / logs / etc
+## Testing Instructions / Screenshots / logs / etc
 
-<!-- Pasos de reproducción/prueba manual para el reviewer o capturas de pantalla/logs -->
+<!-- Reproduction/manual testing steps for the reviewer or screenshots/logs -->

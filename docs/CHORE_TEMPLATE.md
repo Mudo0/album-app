@@ -1,66 +1,66 @@
-# Chore: [Nombre breve de la tarea]
+# Chore: [Short task name]
 
-- **ID:** chore-[tarea]-[YYYYMMDD]
-- **Fecha:** YYYY-MM-DD
-- **Ubicación inicial (sin terminar):** chores/pending/
-- **Ubicación final (terminada):** chores/done/chore-[tarea]-[YYYYMMDD]-done.md
-- **Estado:** PENDING
+- **ID:** chore-[task]-[YYYYMMDD]
+- **Date:** YYYY-MM-DD
+- **Initial location (incomplete):** chores/pending/
+- **Final location (completed):** chores/done/chore-[task]-[YYYYMMDD]-done.md
+- **Status:** PENDING
 
-> **Nota:** Toda tarea en progreso o pendiente de ejecución debe residir estrictamente dentro del directorio `chores/pending/`. Solo se moverá a `chores/done/` una vez completados todos los pasos y superado el checklist.
+> **Note:** Every task in progress or pending execution must reside strictly within the `chores/pending/` directory. It will only be moved to `chores/done/` once all steps are completed and the checklist is passed.
 
 ---
 
-## 1. Archivos Afectados
+## 1. Affected Files
 
-Lista explícita de archivos a crear, modificar o eliminar.
+Explicit list of files to create, modify, or delete.
 
-| Acción      | Ruta del Archivo                        | Propósito del cambio              |
+| Action      | File Path                               | Purpose of the change              |
 | :---------- | :-------------------------------------- | :-------------------------------- |
-| `MODIFICAR` | `src/api/Controllers/UserController.cs` | Inyectar servicio de auditoría    |
-| `CREAR`     | `src/core/Services/AuditService.cs`     | Implementación del log de eventos |
-| `ELIMINAR`  | `src/core/Legacy/OldLogger.cs`          | Limpieza de código en desuso      |
+| `MODIFY`    | `src/api/Controllers/UserController.cs` | Inject audit service              |
+| `CREATE`    | `src/core/Services/AuditService.cs`     | Event logging implementation      |
+| `DELETE`    | `src/core/Legacy/OldLogger.cs`          | Cleanup of deprecated code        |
 
 ---
 
-## 2. Pasos Detallados de Implementación
+## 2. Detailed Implementation Steps
 
-Secuencia estricta y reproducible de ejecución.
+Strict and reproducible execution sequence.
 
-1. **[Paso 1: Preparación]**
+1. **[Step 1: Preparation]**
 
-- Descripción: ...
-- Comando / Acción: ...
+- Description: ...
+- Command / Action: ...
 
-2. **[Paso 2: Modificación de lógica]**
+2. **[Step 2: Logic modification]**
 
-- Descripción: ...
-- Cambios específicos:
+- Description: ...
+- Specific changes:
 
 ```csharp
-// Snippet o lógica de referencia
+// Reference snippet or logic
 ```
 
-3. **[Paso 3: Verificación / Tests]**
+3. **[Step 3: Verification / Tests]**
 
-- Correr suite de tests: `dotnet test` o `mvn test`
-- Validar ausencia de breaking changes y warnings.
-
----
-
-## 3. Observaciones y Restricciones (Gotchas)
-
-Puntos críticos, dependencias ocultas y lo que **NO** se debe hacer.
-
-- **CUIDADO:** [Ej: No alterar la firma pública del método `X` porque rompe contratos con clientes externos].
-- **NO HACER:** [Ej: No ejecutar migraciones de base de datos directamente en el startup de la aplicación].
-- **DEPENDENCIAS:** [Ej: Requiere variable de entorno `AUDIT_ENABLED=true` para pruebas locales].
+- Run the test suite: `dotnet test` or `mvn test`
+- Validate absence of breaking changes and warnings.
 
 ---
 
-## 4. Checklist de Cierre
+## 3. Observations and Restrictions (Gotchas)
 
-- [ ] Todos los archivos listados en la sección 1 fueron modificados/creados.
-- [ ] Pruebas unitarias/integración pasando al 100%.
-- [ ] no hay errores/breaking changes (si es que hay, se informaron).
-- [ ] Archivo renombrado agregando `-done` (`chore-[tarea]-[YYYYMMDD]-done.md`).
-- [ ] Archivo movido de `chores/pending/` a `chores/done/`.
+Critical points, hidden dependencies, and what **NOT** to do.
+
+- **CAUTION:** [E.g.: Do not alter the public signature of method `X` because it breaks contracts with external clients].
+- **DO NOT:** [E.g.: Do not run database migrations directly on application startup].
+- **DEPENDENCIES:** [E.g.: Requires environment variable `AUDIT_ENABLED=true` for local tests].
+
+---
+
+## 4. Closing Checklist
+
+- [ ] All files listed in section 1 were modified/created.
+- [ ] Unit/integration tests passing at 100%.
+- [ ] No errors/breaking changes (if any, they were reported).
+- [ ] File renamed adding `-done` (`chore-[task]-[YYYYMMDD]-done.md`).
+- [ ] File moved from `chores/pending/` to `chores/done/`.
