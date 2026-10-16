@@ -130,6 +130,20 @@ function exitError(msg) {
   process.exit(1);
 }
 
+function assertCleanTree() {
+  // Más adelante stageAndCommit hace `git add .`: con el árbol sucio, TODOS los
+  // cambios pendientes caen dentro del commit de versión. Falla temprano y claro.
+  const dirty = execSync('git status --porcelain', { cwd: ROOT })
+    .toString()
+    .trim();
+  if (dirty) {
+    exitError(
+      'Hay cambios sin commitear. Commitealos (npm run push) o guardalos (git stash) antes de releasear:\n\n' +
+        dirty,
+    );
+  }
+}
+
 // ── Input ───────────────────────────────────────────────────────────────────
 
 async function askStage() {
@@ -221,6 +235,8 @@ function createVersionTag(version) {
 
 async function main() {
   console.log('\n🚀  ---  PREPARAR RELEASE LOCAL  ---\n');
+
+  assertCleanTree();
 
   const originalPkg = readPackageJson();
   const originalLock = fs.existsSync(path.join(ROOT, 'package-lock.json'))

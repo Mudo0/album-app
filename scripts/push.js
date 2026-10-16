@@ -78,15 +78,29 @@ function getHeadTags() {
   }
 }
 
+function getReleaseTagsToPush() {
+  // Solo la serie vX.Y.Z[-etapa.N] que crea release.js. Nunca dev-v* (los genera
+  // el CI) ni tags experimentales: un tag huérfano no debe disparar un build.
+  return gitCapture(['tag', '--list', 'v*'])
+    .split('\n')
+    .filter((t) => /^v\d+\.\d+\.\d+/.test(t));
+}
+
 function pushCommitsAndTags() {
   // --quiet suprime el ruido del transporte (Enumerating/Counting/Writing...);
   // los errores igual salen en stderr y se propagan como excepción
   const push = gitQuiet(['push', '--quiet']);
   if (push.status !== 0) throw new Error(push.stderr.trim() || 'git push falló');
 
-  // Los tags (vX.Y.Z-etapa.N) disparan el workflow en GitHub
-  const tags = gitQuiet(['push', '--tags', '--quiet']);
-  if (tags.status !== 0) throw new Error(tags.stderr.trim() || 'git push --tags falló');
+  // Tags explícitos en vez de `git push --tags` (que subiría TODO tag local).
+  // Los vX.Y.Z-etapa.N disparan el workflow en GitHub.
+  const tags = getReleaseTagsToPush().map((t) => `refs/tags/${t}`);
+  if (tags.length === 0) return;
+
+  const tagPush = gitQuiet(['push', '--quiet', 'origin', ...tags]);
+  if (tagPush.status !== 0) {
+    throw new Error(tagPush.stderr.trim() || 'git push de tags falló');
+  }
 }
 
 function buildDiscordMessage(commits) {
